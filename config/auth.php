@@ -48,7 +48,7 @@ return [
 
         'user-aes' => [
             'driver' => 'passport',
-            'provider' => 'aes.user',
+            'provider' => 'users',
         ],
 
         'pasien' => [

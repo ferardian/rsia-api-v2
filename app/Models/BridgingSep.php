@@ -270,6 +270,16 @@ class BridgingSep extends Model
         return $this->belongsTo(RsiaGroupingChunks::class, 'no_sep', 'no_sep');
     }
 
+     /**
+     * Get the rsia_grouping_chunks that owns the BridgingSep
+     * 
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
+     * */
+    public function reqresidrg()
+    {
+        return $this->belongsTo(RsiaReqResIdrg::class, 'no_sep', 'no_sep');
+    }
+
     /**
      * Get the bridging_surat_kontrol_bpjs that owns the BridgingSep
      * 

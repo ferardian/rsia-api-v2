@@ -27,7 +27,7 @@ class BerkasPegawai extends Model
     use HasFactory;
 
     protected $table = 'berkas_pegawai';
-
+    
     protected $primaryKey = 'kode_berkas';
 
     protected $guarded = [];

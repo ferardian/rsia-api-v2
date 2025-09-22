@@ -8,9 +8,12 @@ use App\Helpers\ApiResponse;
 use App\Helpers\NaikKelasHelper;
 use Illuminate\Support\Facades\Log;
 use App\Http\Controllers\Controller;
+use App\Models\RsiaReqResIdrg;
 use Halim\EKlaim\Builders\BodyBuilder;
 use Halim\EKlaim\Services\EklaimService;
 use Halim\EKlaim\Controllers\GroupKlaimController;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class KlaimController extends Controller
 {
@@ -151,7 +154,7 @@ class KlaimController extends Controller
                 "payor_cd"  => $request->payor_cd,
             ];
 
-            $data = array_merge($required, \Halim\EKlaim\Helpers\ClaimDataParser::parse($request));
+            $data = array_merge($required, \Halim\EKlaim\Helpers\ClaimDataParser::parseClaim($request));
 
             // if in data not has nama_dokter key add it
             if (!array_key_exists('nama_dokter', $data)) {
@@ -166,50 +169,57 @@ class KlaimController extends Controller
 
             BodyBuilder::setMetadata('set_claim_data', ["nomor_sep" => $sep]);
             BodyBuilder::setData($data);
+            // simpan request payload dalam bentuk array (bukan stdClass)
+            $requestPayload = json_decode(json_encode(BodyBuilder::prepared()), true);
 
-            EklaimService::send(BodyBuilder::prepared())->then(function ($response) use ($sep, $data) {
+            EklaimService::send($requestPayload)->then(function ($response) use ($sep, $data, $requestPayload) {
                 Log::channel(config('eklaim.log_channel'))->info("SET KLAIM DATA", [
                     "sep"      => $sep,
                     "data"     => json_decode(json_encode(BodyBuilder::prepared()), true),
                     "response" => $response,
                 ]);
+                 $decodedResponse = json_decode(json_encode($response), true);
 
                 // ==================================================== SAVE DATAS
 
-                $this->saveDiagnosaAndProcedures($data);
+                // $this->saveDiagnosaAndProcedures($data);
                 $this->saveChunksData($data);
+
+                // simpan request & response set_claim
+               $this->saveReqResIdrg($sep, $requestPayload, $decodedResponse, 'set_claim');
+
 
                 // ==================================================== END OF SAVE DATAS
             });
 
             // [2]. Grouping stage 1 & 2
-            usleep(rand(500, 1000) * 1000);
+            // usleep(rand(500, 1000) * 1000);
 
-            $hasilGrouping = $this->groupStages($sep);
-            $responseCode  = SafeAccess::object($hasilGrouping, 'response->cbg->code');
+            // $hasilGrouping = $this->groupStages($sep);
+            // $responseCode  = SafeAccess::object($hasilGrouping, 'response->cbg->code');
 
-            if (SafeAccess::object($hasilGrouping, "metadata->error_no")) {
-                throw new \Exception(SafeAccess::object($hasilGrouping, "metadata->error_no") . " : " . SafeAccess::object($hasilGrouping, "metadata->message"), SafeAccess::object($hasilGrouping, "metadata->code"));
-            }
+            // if (SafeAccess::object($hasilGrouping, "metadata->error_no")) {
+            //     throw new \Exception(SafeAccess::object($hasilGrouping, "metadata->error_no") . " : " . SafeAccess::object($hasilGrouping, "metadata->message"), SafeAccess::object($hasilGrouping, "metadata->code"));
+            // }
 
             // cekNaikKelas
-            $this->cekNaikKelas($sep, $hasilGrouping, $request);
+            // $this->cekNaikKelas($sep, $hasilGrouping, $request);
 
             // [3]. Final Klaim
-            usleep(rand(500, 1000) * 1000);
-            $this->finalClaim($sep);
+            // usleep(rand(500, 1000) * 1000);
+            // $this->finalClaim($sep);
 
-            if (SafeAccess::object($hasilGrouping, 'metadata->code') == 200) {
-                Log::channel(config('eklaim.log_channel'))->info("HASIL", ["grouping" => $hasilGrouping, "response" => $responseCode]);
-            } else {
-                Log::channel(config('eklaim.log_channel'))->error("HASIL", ["grouping" => $hasilGrouping, "response" => $responseCode]);
-            }
+            // if (SafeAccess::object($hasilGrouping, 'metadata->code') == 200) {
+            //     Log::channel(config('eklaim.log_channel'))->info("HASIL", ["grouping" => $hasilGrouping, "response" => $responseCode]);
+            // } else {
+            //     Log::channel(config('eklaim.log_channel'))->error("HASIL", ["grouping" => $hasilGrouping, "response" => $responseCode]);
+            // }
 
-            if ($responseCode && (Str::startsWith($responseCode, 'X') || Str::startsWith($responseCode, 'x'))) {
-                throw new \Exception($hasilGrouping->response->cbg->code . " : " . $hasilGrouping->response->cbg->description);
-            }
+            // if ($responseCode && (Str::startsWith($responseCode, 'X') || Str::startsWith($responseCode, 'x'))) {
+            //     throw new \Exception($hasilGrouping->response->cbg->code . " : " . $hasilGrouping->response->cbg->description);
+            // }
 
-            return ApiResponse::successWithData($hasilGrouping->response, "Grouping Berhasil dilakukan");
+            // return ApiResponse::successWithData($hasilGrouping->response, "Grouping Berhasil dilakukan");
         } catch (\Throwable $th) {
             Log::channel(config('eklaim.log_channel'))->error("SET KLAIM DATA", [
                 "error" => $th->getMessage(),
@@ -218,6 +228,389 @@ class KlaimController extends Controller
             return ApiResponse::error($th->getMessage(), 500);
         }
     }
+
+   public function setGroupingIdrg(Request $request, string $sep)
+{
+    try {
+        // 1. Kirim Diagnosa
+        $diagnosaData = \Halim\EKlaim\Helpers\ClaimDataParser::parseDiagnosis($request);
+
+        BodyBuilder::setMetadata('idrg_diagnosa_set', ["nomor_sep" => $sep]);
+        BodyBuilder::setData($diagnosaData);
+
+        $diagnosaResponse = EklaimService::send(BodyBuilder::prepared());
+        $diagnosaDecoded  = $this->decodeResponse($diagnosaResponse);
+
+        Log::channel(config('eklaim.log_channel'))->info("IDRG DIAGNOSA SET", [
+            "sep"      => $sep,
+            "data"     => json_decode(json_encode(BodyBuilder::prepared()), true),
+            "response" => $diagnosaDecoded,
+        ]);
+        
+
+        $requestData = json_decode(json_encode(BodyBuilder::prepared()), true);
+        $responseData = json_decode(json_encode($diagnosaDecoded), true);
+
+                Log::info("DEBUG RAW DIAGNOSA RESPONSE", [
+            "sep"      => $sep,
+            "raw"      => $diagnosaResponse,
+            "decoded"  => $diagnosaDecoded,
+        ]);
+
+
+        $this->saveReqResIdrg($sep, $requestData, $responseData, 'idrg_diagnosa');
+        // Jika gagal, hentikan
+       $diagnosaCode = $diagnosaDecoded['metadata']['code'] ?? 400;
+
+
+        // 2. Kirim Procedure
+        $procedureData = \Halim\EKlaim\Helpers\ClaimDataParser::parseProcedure($request);
+
+        // === Tambahan logic untuk handle multiplicity ===
+        if (!empty($procedureData['procedure'])) {
+            $procedures = explode('#', $procedureData['procedure']);
+            $counter = [];
+
+            foreach ($procedures as $proc) {
+                $counter[$proc] = ($counter[$proc] ?? 0) + 1;
+            }
+
+            // Format ulang: kalau count > 1 → kode+count
+            $procedureData['procedure'] = implode('#', array_map(
+                fn($kode, $count) => $count > 1 ? "{$kode}+{$count}" : $kode,
+                array_keys($counter),
+                $counter
+            ));
+        }
+
+        BodyBuilder::setMetadata('idrg_procedure_set', ["nomor_sep" => $sep]);
+        BodyBuilder::setData($procedureData);
+
+        $procedureResponse = EklaimService::send(BodyBuilder::prepared());
+        $procedureDecoded  = $this->decodeResponse($procedureResponse);
+
+        Log::channel(config('eklaim.log_channel'))->info("IDRG PROCEDURE SET", [
+            "sep"      => $sep,
+            "data"     => json_decode(json_encode(BodyBuilder::prepared()), true),
+            "response" => $procedureDecoded,
+        ]);
+
+        $requestData = json_decode(json_encode(BodyBuilder::prepared()), true);
+        $responseData = json_decode(json_encode($procedureDecoded), true);
+
+        $this->saveReqResIdrg($sep, $requestData, $responseData, 'idrg_procedure');
+
+     
+
+        $procedureCode = $procedureDecoded['metadata']['code'] ?? 400;
+
+
+        // 3. Kirim Grouper Stage 1
+        BodyBuilder::setMetadata('grouper', [
+            "stage"   => "1",
+            "grouper" => "idrg"
+        ]);
+        BodyBuilder::setData(["nomor_sep" => $sep]);
+
+        $grouperResponse = EklaimService::send(BodyBuilder::prepared());
+        $grouperDecoded  = $this->decodeResponse($grouperResponse);
+
+        Log::channel(config('eklaim.log_channel'))->info("IDRG GROUPER STAGE 1", [
+            "sep"      => $sep,
+            "data"     => json_decode(json_encode(BodyBuilder::prepared()), true),
+            "response" => $grouperDecoded,
+        ]);
+
+        $requestData = json_decode(json_encode(BodyBuilder::prepared()), true);
+        $responseData = json_decode(json_encode($grouperDecoded), true);
+
+        $this->saveReqResIdrg($sep, $requestData, $responseData, 'grouper');
+
+        return ApiResponse::success($grouperDecoded);
+
+    } catch (\Throwable $th) {
+        Log::channel(config('eklaim.log_channel'))->error("IDRG GROUPING ERROR", [
+            "sep"   => $sep,
+            "error" => $th->getMessage(),
+        ]);
+
+        return ApiResponse::error($th->getMessage(), 500);
+    }
+}
+
+public function setGroupingInacbg(Request $request, string $sep)
+{
+    try {
+        // ===================================================================
+        // LANGKAH 1: KIRIM DIAGNOSA
+        // ===================================================================
+        $diagnosaData = \Halim\EKlaim\Helpers\ClaimDataParser::parseDiagnosis($request);
+
+        BodyBuilder::setMetadata('inacbg_diagnosa_set', ["nomor_sep" => $sep]);
+        BodyBuilder::setData($diagnosaData);
+
+        $diagnosaResponse = EklaimService::send(BodyBuilder::prepared());
+        $diagnosaDecoded  = $this->decodeResponse($diagnosaResponse);
+
+        // Logging (opsional, tapi sangat direkomendasikan)
+        Log::info("INA-CBG DIAGNOSA SET", [
+            "sep"      => $sep,
+            "request"  => json_decode(json_encode(BodyBuilder::prepared()), true),
+            "response" => $diagnosaDecoded,
+        ]);
+
+        $requestData = json_decode(json_encode(BodyBuilder::prepared()), true);
+        $responseData = json_decode(json_encode($diagnosaDecoded), true);
+
+        $this->saveReqResIdrg($sep, $requestData, $responseData, 'inacbg_diagnosa');
+
+        // Hentikan proses jika request pertama gagal
+        if (($diagnosaDecoded['metadata']['code'] ?? 400) != 200) {
+            return ApiResponse::error('Gagal saat set diagnosa INA-CBG', 400, $diagnosaDecoded);
+        }
+
+        // ===================================================================
+        // LANGKAH 2: KIRIM PROSEDUR
+        // ===================================================================
+        $procedureData = \Halim\EKlaim\Helpers\ClaimDataParser::parseProcedure($request);
+
+        BodyBuilder::setMetadata('inacbg_procedure_set', ["nomor_sep" => $sep]);
+        BodyBuilder::setData($procedureData);
+
+        $procedureResponse = EklaimService::send(BodyBuilder::prepared());
+        $procedureDecoded  = $this->decodeResponse($procedureResponse);
+
+        // Logging
+        Log::info("INA-CBG PROCEDURE SET", [
+            "sep"      => $sep,
+            "request"  => json_decode(json_encode(BodyBuilder::prepared()), true),
+            "response" => $procedureDecoded,
+        ]);
+
+        $requestData = json_decode(json_encode(BodyBuilder::prepared()), true);
+        $responseData = json_decode(json_encode($diagnosaDecoded), true);
+
+        $this->saveReqResIdrg($sep, $requestData, $responseData, 'inacbg_procedure');
+
+        // Hentikan proses jika request kedua gagal
+        if (($procedureDecoded['metadata']['code'] ?? 400) != 200) {
+            return ApiResponse::error('Gagal saat set prosedur INA-CBG', 400, $procedureDecoded);
+        }
+
+        // ===================================================================
+        // LANGKAH 3: JALANKAN GROUPER
+        // ===================================================================
+        BodyBuilder::setMetadata('grouper', [
+            "stage"   => "1",
+            "grouper" => "inacbg" // Menggunakan grouper "inacbg"
+        ]);
+        BodyBuilder::setData(["nomor_sep" => $sep]);
+
+        $grouperResponse = EklaimService::send(BodyBuilder::prepared());
+        $grouperDecoded  = $this->decodeResponse($grouperResponse);
+
+        // Logging
+        Log::info("INA-CBG GROUPER", [
+            "sep"      => $sep,
+            "request"  => json_decode(json_encode(BodyBuilder::prepared()), true),
+            "response" => $grouperDecoded,
+        ]);
+
+        $requestData = json_decode(json_encode(BodyBuilder::prepared()), true);
+        $responseData = json_decode(json_encode($diagnosaDecoded), true);
+
+        $this->saveReqResIdrg($sep, $requestData, $responseData, 'grouper_inacbg_stage1');
+
+        // Kembalikan hasil akhir dari grouper
+        return ApiResponse::success($grouperDecoded);
+
+    } catch (\Throwable $th) {
+        // Tangani jika terjadi error tak terduga
+        Log::error("INA-CBG GROUPING FATAL ERROR", [
+            "sep"   => $sep,
+            "error" => $th->getMessage(),
+            "trace" => $th->getTraceAsString()
+        ]);
+
+        return ApiResponse::error('Terjadi kesalahan pada server: ' . $th->getMessage(), 500);
+    }
+}
+
+
+public function final(Request $request, $sep)
+{
+    try {
+        // Bangun payload
+        BodyBuilder::setMetadata("idrg_grouper_final");
+        BodyBuilder::setData([
+            "nomor_sep" => $sep
+        ]);
+
+        // Kirim ke Eklaim
+        $finalGrouperResponse = EklaimService::send(BodyBuilder::prepared());
+        $finalGrouperDecoded  = $this->decodeResponse($finalGrouperResponse);
+
+        // Logging
+        Log::channel(config('eklaim.log_channel'))->info("IDRG FINAL GROUPER", [
+            "sep"      => $sep,
+            "data"     => json_decode(json_encode(BodyBuilder::prepared()), true),
+            "response" => $finalGrouperDecoded,
+        ]);
+
+        $requestData = json_decode(json_encode(BodyBuilder::prepared()), true);
+        $responseData = json_decode(json_encode($finalGrouperDecoded), true);
+
+        // Simpan ke tabel req/res
+        $this->saveReqResIdrg($sep, $requestData, $responseData, 'final');
+
+        // 🔹 hapus kolom reedit_res di record SEP ini
+        RsiaReqResIdrg::where('no_sep', $sep)->update([
+            'reedit_res' => null
+        ]);
+
+        // Beri respons balik ke FE
+        return response()->json($finalGrouperDecoded, 200);
+    } catch (\Throwable $e) {
+        Log::channel(config('eklaim.log_channel'))->error("IDRG FINAL GROUPER ERROR", [
+            "sep"      => $sep,
+            "message"  => $e->getMessage(),
+            "trace"    => $e->getTraceAsString(),
+        ]);
+
+        return response()->json([
+            "metadata" => [
+                "code"    => 500,
+                "message" => "Terjadi kesalahan saat memproses final grouper: " . $e->getMessage(),
+            ],
+        ], 500);
+    }
+}
+
+
+public function reEditIdrg(Request $request, $no_sep)
+{
+    try {
+        BodyBuilder::setMetadata('idrg_grouper_reedit', [
+            "method" => "idrg_grouper_reedit"
+        ]);
+        BodyBuilder::setData([
+            "nomor_sep" => $no_sep
+        ]);
+
+        $reeditResponse = EklaimService::send(BodyBuilder::prepared());
+        $reeditDecoded  = $this->decodeResponse($reeditResponse);
+
+        Log::channel(config('eklaim.log_channel'))->info("IDRG REEDIT GROUPER", [
+            "sep"      => $no_sep,
+            "data"     => json_decode(json_encode(BodyBuilder::prepared()), true),
+            "response" => $reeditDecoded,
+        ]);
+
+        $this->saveReqResIdrg(
+            $no_sep,
+            json_decode(json_encode(BodyBuilder::prepared()), true),
+            json_decode(json_encode($reeditDecoded), true),
+            'reedit'
+        );
+
+        return response()->json($reeditDecoded, 200);
+    } catch (\Throwable $e) {
+        Log::channel(config('eklaim.log_channel'))->error("IDRG REEDIT ERROR", [
+            "sep"    => $no_sep,
+            "error"  => $e->getMessage(),
+        ]);
+        return response()->json([
+            "metadata" => [
+                "code"    => 500,
+                "message" => "Gagal reedit IDRG: " . $e->getMessage(),
+            ]
+        ], 500);
+    }
+}
+
+
+public function importIdrgToInacbg(Request $request, $no_sep)
+    {
+        try {
+            // Bangun payload untuk service eksternal
+            BodyBuilder::setMetadata("idrg_to_inacbg_import");
+            BodyBuilder::setData([
+                "nomor_sep" => $no_sep
+            ]);
+
+            // Kirim request ke Eklaim Service
+            $importResponse = EklaimService::send(BodyBuilder::prepared());
+            $importDecoded  = $this->decodeResponse($importResponse);
+
+            // Logging
+            Log::channel(config('eklaim.log_channel'))->info("IDRG_TO_INACBG_IMPORT", [
+                "sep"      => $no_sep,
+                "data"     => json_decode(json_encode(BodyBuilder::prepared()), true),
+                "response" => $importDecoded,
+            ]);
+
+            // (Opsional) Simpan request & response ke database
+            $this->saveReqResIdrg(
+                $no_sep,
+                json_decode(json_encode(BodyBuilder::prepared()), true),
+                json_decode(json_encode($importDecoded), true),
+                'import_idrg_to_inacbg' // tipe log baru
+            );
+
+            // Kembalikan response ke Frontend
+            // Response ini diasumsikan berisi data diagnosa & prosedur yang akan ditampilkan
+            return response()->json($importDecoded, 200);
+
+        } catch (\Throwable $e) {
+            Log::channel(config('eklaim.log_channel'))->error("IDRG_TO_INACBG_IMPORT ERROR", [
+                "sep"    => $no_sep,
+                "error"  => $e->getMessage(),
+            ]);
+            return response()->json([
+                "metadata" => [
+                    "code"    => 500,
+                    "message" => "Gagal mengimpor data dari iDRG ke INACBG: " . $e->getMessage(),
+                ]
+            ], 500);
+        }
+    }
+
+
+   public function setDiagnosaIdrg(Request $request, string $sep)
+{
+    try {
+    $data = \Halim\EKlaim\Helpers\ClaimDataParser::parseDiagnosisAndProcedure($request);
+
+    BodyBuilder::setMetadata('idrg_diagnosa_set', ["nomor_sep" => $sep]);
+    BodyBuilder::setData($data);
+  
+
+    EklaimService::send(BodyBuilder::prepared())->then(function ($response) use ($sep, $data) {
+                Log::channel(config('eklaim.log_channel'))->info("IDRG DIAGNOSA SET", [
+                    "sep"      => $sep,
+                    "data"     => json_decode(json_encode(BodyBuilder::prepared()), true),
+                    "response" => $response,
+                ]);
+
+                // ==================================================== SAVE DATAS
+
+                // $this->saveDiagnosaAndProcedures($data);
+                // $this->saveChunksData($data);
+
+                // simpan request & response set_claim
+                $this->saveReqResIdrg($sep, $data, $response);
+
+                // ==================================================== END OF SAVE DATAS
+            });
+            } catch (\Throwable $th) {
+            Log::channel(config('eklaim.log_channel'))->error("IDRG DIAGNOSA SET", [
+                "error" => $th->getMessage(),
+            ]);
+
+            return ApiResponse::error($th->getMessage(), 500);
+        }
+}
+
 
     public function reEdit(String $sep)
     {
@@ -375,6 +768,75 @@ class KlaimController extends Controller
             throw $e;
         }
     }
+
+private function saveReqResIdrg(string $sep, array $requestData, ?array $responseData, string $type = 'set_claim')
+{
+    $updateData = [
+        'updated_at' => now(),
+    ];
+
+    switch ($type) {
+        case 'set_claim':
+            $updateData['set_claim_req'] = json_encode($requestData ?? [], JSON_UNESCAPED_UNICODE);
+            $updateData['set_claim_res'] = json_encode($responseData ?? [], JSON_UNESCAPED_UNICODE);
+            break;
+
+        case 'idrg_diagnosa':
+            $updateData['idrg_diagnosa_req'] = json_encode($requestData ?? [], JSON_UNESCAPED_UNICODE);
+            $updateData['idrg_diagnosa_res'] = json_encode($responseData ?? [], JSON_UNESCAPED_UNICODE);
+            break;
+
+        case 'idrg_procedure':
+            $updateData['idrg_procedure_req'] = json_encode($requestData ?? [], JSON_UNESCAPED_UNICODE);
+            $updateData['idrg_procedure_res'] = json_encode($responseData ?? [], JSON_UNESCAPED_UNICODE);
+            break;
+
+        case 'grouper':
+            $updateData['grouper_req'] = json_encode($requestData ?? [], JSON_UNESCAPED_UNICODE);
+            $updateData['grouper_res'] = json_encode($responseData ?? [], JSON_UNESCAPED_UNICODE);
+            break;
+
+        case 'final':
+            $updateData['final_req'] = json_encode($requestData ?? [], JSON_UNESCAPED_UNICODE);
+            $updateData['final_res'] = json_encode($responseData ?? [], JSON_UNESCAPED_UNICODE);
+            break;
+
+        case 'reedit':
+            $updateData['reedit_req'] = json_encode($requestData ?? [], JSON_UNESCAPED_UNICODE);
+            $updateData['reedit_res'] = json_encode($responseData ?? [], JSON_UNESCAPED_UNICODE);
+            break;
+        
+        case 'import_idrg_to_inacbg':
+            $updateData['import_idrg_to_inacbg_req'] = json_encode($requestData ?? [], JSON_UNESCAPED_UNICODE);
+            $updateData['import_idrg_to_inacbg_res'] = json_encode($responseData ?? [], JSON_UNESCAPED_UNICODE);
+            break;
+
+         case 'inacbg_diagnosa':
+            $updateData['inacbg_diagnosa_req'] = json_encode($requestData ?? [], JSON_UNESCAPED_UNICODE);
+            $updateData['inacbg_diagnosa_res'] = json_encode($responseData ?? [], JSON_UNESCAPED_UNICODE);
+            break;
+
+         case 'inacbg_procedure':
+            $updateData['inacbg_procedure_req'] = json_encode($requestData ?? [], JSON_UNESCAPED_UNICODE);
+            $updateData['inacbg_procedure_res'] = json_encode($responseData ?? [], JSON_UNESCAPED_UNICODE);
+            break;
+
+         case 'grouper_inacbg_stage1':
+            $updateData['grouper_inacbg_stage1_req'] = json_encode($requestData ?? [], JSON_UNESCAPED_UNICODE);
+            $updateData['grouper_inacbg_stage1_res'] = json_encode($responseData ?? [], JSON_UNESCAPED_UNICODE);
+            break;
+    }
+
+    \App\Models\RsiaReqResIdrg::updateOrCreate(
+        ['no_sep' => $sep],
+        $updateData
+    );
+}
+
+
+
+
+
 
     private function saveDiagnosaAndProcedures($klaim_data)
     {
@@ -678,4 +1140,21 @@ class KlaimController extends Controller
 
         return $xPersen;
     }
+
+   private function decodeResponse($response): array
+{
+    // convert ke string
+    $raw = (string) $response;
+
+    // cari posisi JSON pertama (tanda { )
+    $pos = strpos($raw, '{');
+    if ($pos !== false) {
+        $json = substr($raw, $pos);
+        return json_decode($json, true) ?? [];
+    }
+
+    return [];
+}
+
+
 }

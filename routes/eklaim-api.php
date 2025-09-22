@@ -9,6 +9,7 @@ use Halim\EKlaim\Controllers\DiagnosisController;
 use Halim\EKlaim\Controllers\GroupKlaimController;
 use Halim\EKlaim\Controllers\ProceduresController;
 use App\Http\Controllers\v2\KlaimController as CustomKlaimController;
+use App\Http\Controllers\v2\RsiaReqResIdrgController;
 
 Route::as("e-klaim.")->middleware(['api', 'user-aes'])->prefix('eklaim')->group(function () {
     Route::post('/new', [CustomKlaimController::class, 'new'])->name('new.claim');                          // =====> method : new_claim
@@ -22,7 +23,9 @@ Route::as("e-klaim.")->middleware(['api', 'user-aes'])->prefix('eklaim')->group(
     Route::get('/{sep}/re-edit', [KlaimController::class, 'reEdit'])->name('reedit.claim');                 // =====> method : reedit_claim
     Route::get('/{sep}/send', [CustomKlaimController::class, 'send'])->name('send.claim.individual');             // =====> method : send_claim_individual
     Route::get('/{sep}/print', [KlaimController::class, 'print'])->name('print.claim');                     // =====> method : claim_print
-    Route::delete('/{sep}', [KlaimController::class, 'delete'])->name('delete.claim');                      // =====> method : delete_claim
+    Route::delete('/{sep}', [KlaimController::class, 'delete'])->name('delete.claim');     
+    Route::post('/{sep}/grouping', [CustomKlaimController::class, 'setGroupingIdrg'])
+        ->name('idrg.diagnosa.set');   // =====> method : set_claim_data_diagnosa                 // =====> method : delete_claim
 
     Route::as('sitb.')->prefix('sitb')->group(function () {
         Route::post('/validate', [SitbController::class, 'validateSitb'])->name('validate');                // =====> method : sitb_validate
@@ -48,6 +51,17 @@ Route::as("e-klaim.")->middleware(['api', 'user-aes'])->prefix('eklaim')->group(
     //     Route::post('/upload', [NewKlaimController::class, 'upload'])->name('upload');                      // =====> method : file_upload
     //     Route::post('/delete', [NewKlaimController::class, 'delete'])->name('delete');                      // =====> method : file_delete
     // });
+    Route::get('/idrg/{no_sep}', [RsiaReqResIdrgController::class, 'index']);
+    Route::post('{no_sep}/final', [CustomKlaimController::class, 'final'])->name('final.claim');  // =====> method : claim_final
+    Route::post('{no_sep}/reedit', [CustomKlaimController::class, 'reEditIdrg'])->name('reedit.claim');  // method : idrg_grouper_reedit
+    // ===== IMPORT IDRG =====
+    Route::post('{no_sep}/import-idrg', [CustomKlaimController::class, 'importIdrgToInacbg'])->name('import.idrg.to.inacbg');
+
+    // ===== IMPORT IDRG =====
+    Route::post('{no_sep}/grouping-inacbg', [CustomKlaimController::class, 'setGroupingInacbg'])->name('grouper.inacbg');
+
+
+
 });
 
 Route::as("e-klaim.")->middleware(['api'])->prefix('eklaim')->group(function () {
@@ -61,3 +75,4 @@ Route::as("e-klaim.")->middleware(['api'])->prefix('eklaim')->group(function () 
         Route::post('/search/ina', [ProceduresController::class, 'searchIna'])->name('search.ina');         // =====> method : search_procedures_inagrouper
     });
 });
+
