@@ -57,10 +57,31 @@ Route::as("e-klaim.")->middleware(['api', 'user-aes'])->prefix('eklaim')->group(
     // ===== IMPORT IDRG =====
     Route::post('{no_sep}/import-idrg', [CustomKlaimController::class, 'importIdrgToInacbg'])->name('import.idrg.to.inacbg');
 
-    // ===== IMPORT IDRG =====
+    // ===== GROUPING INACBG =====
     Route::post('{no_sep}/grouping-inacbg', [CustomKlaimController::class, 'setGroupingInacbg'])->name('grouper.inacbg');
 
+    // ===== GROUPING INACBG STAGE 2=====
+    Route::post('{no_sep}/grouping-inacbg-stage2', [CustomKlaimController::class, 'groupingStage2'])->name('grouper.stage2.inacbg');
 
+    // ===== FINAL INACBG =====
+    Route::post('{no_sep}/final-inacbg', [CustomKlaimController::class, 'finalInacbg'])->name('final.inacbg');
+
+    // ===== FINAL INACBG =====
+    Route::post('{no_sep}/reedit-inacbg', [CustomKlaimController::class, 'reeditInacbg'])->name('reedit.inacbg');
+
+    // ===== FINAL KLAIM =====
+    Route::post('{no_sep}/final-klaim', [CustomKlaimController::class, 'finalKlaim'])->name('final.klaim');
+
+     // ===== FINAL KLAIM =====
+    Route::post('{no_sep}/reedit-klaim', [CustomKlaimController::class, 'reeditKlaim'])->name('reedit.klaim');
+
+     // ===== KIRIM ONLINE =====
+    Route::post('{no_sep}/send-klaim', [CustomKlaimController::class, 'sendClaim'])->name('send.klaim');
+
+    // ===== CETAK KLAIM =====
+    Route::post('{no_sep}/print-klaim', [CustomKlaimController::class, 'printClaim'])->name('print.klaim');
+
+    
 
 });
 

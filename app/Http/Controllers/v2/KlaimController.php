@@ -326,6 +326,13 @@ class KlaimController extends Controller
 
         $this->saveReqResIdrg($sep, $requestData, $responseData, 'grouper');
 
+         RsiaReqResIdrg::where('no_sep', $sep)->update([
+            'reedit_req' => null,
+            'reedit_res' => null,
+        ]);
+
+        
+
         return ApiResponse::success($grouperDecoded);
 
     } catch (\Throwable $th) {
@@ -388,7 +395,7 @@ public function setGroupingInacbg(Request $request, string $sep)
         ]);
 
         $requestData = json_decode(json_encode(BodyBuilder::prepared()), true);
-        $responseData = json_decode(json_encode($diagnosaDecoded), true);
+        $responseData = json_decode(json_encode($procedureDecoded), true);
 
         $this->saveReqResIdrg($sep, $requestData, $responseData, 'inacbg_procedure');
 
@@ -417,9 +424,52 @@ public function setGroupingInacbg(Request $request, string $sep)
         ]);
 
         $requestData = json_decode(json_encode(BodyBuilder::prepared()), true);
-        $responseData = json_decode(json_encode($diagnosaDecoded), true);
+        $responseData = json_decode(json_encode($grouperDecoded), true);
 
         $this->saveReqResIdrg($sep, $requestData, $responseData, 'grouper_inacbg_stage1');
+         
+        RsiaReqResIdrg::where('no_sep', $sep)->update([
+            'grouper_inacbg_stage2_req' => null,
+            'grouper_inacbg_stage2_res' => null,
+        ]);
+
+        // ===================================================================
+        // BAGIAN YANG DIPERBAIKI: Menyimpan hasil grouping ke tabel
+        // ===================================================================
+        try {
+            // Logika cerdas untuk menangani jika ada pembungkus 'message' atau tidak
+            $payload = isset($grouperDecoded['message']) ? $grouperDecoded['message'] : $grouperDecoded;
+
+            // Gunakan helper 'data_get' dari Laravel untuk akses data yang aman
+            $groupingData = [
+                "no_sep"    => $sep,
+                "code_cbg"  => data_get($payload, 'response_inacbg.cbg.code'),
+                "deskripsi" => data_get($payload, 'response_inacbg.cbg.description'),
+                "tarif"     => data_get($payload, 'response_inacbg.tariff'), // Ambil 'tariff' utama dari stage 1
+            ];
+
+            // Lakukan penyimpanan hanya jika kode CBG berhasil didapatkan
+            if ($groupingData['code_cbg']) {
+                \Illuminate\Support\Facades\DB::transaction(function () use ($sep, $groupingData) {
+                    \App\Models\InacbgGropingStage12::where('no_sep', $sep)->delete();
+                    \App\Models\InacbgGropingStage12::create($groupingData);
+                }, 5);
+
+                Log::channel(config('eklaim.log_channel'))->info("SIMPAN HASIL INACBG GROUPING KE DB", $groupingData);
+            } else {
+                Log::channel(config('eklaim.log_channel'))->warning("HASIL INACBG GROUPING KOSONG, TIDAK DISIMPAN", [
+                    "sep" => $sep, "response" => $grouperDecoded,
+                ]);
+            }
+
+        } catch (\Throwable $th) {
+            Log::channel(config('eklaim.log_channel'))->error("GAGAL SIMPAN HASIL INACBG GROUPING KE DB", [
+                "error" => $th->getMessage(),
+            ]);
+        }
+
+        // cekNaikKelas
+            // $this->cekNaikKelas($sep, $hasilGrouping, $request);
 
         // Kembalikan hasil akhir dari grouper
         return ApiResponse::success($grouperDecoded);
@@ -433,6 +483,68 @@ public function setGroupingInacbg(Request $request, string $sep)
         ]);
 
         return ApiResponse::error('Terjadi kesalahan pada server: ' . $th->getMessage(), 500);
+    }
+}
+
+// Tambahkan method baru ini di Controller PHP Anda
+public function groupingStage2(Request $request, string $sep)
+{
+    try {
+        $specialCmg = $request->input('data.special_cmg', '');
+
+        // 1. Bangun payload untuk stage 2
+       BodyBuilder::setMetadata('grouper', [
+            "stage"   => "2",
+            "grouper" => "inacbg" // Menggunakan grouper "inacbg"
+        ]);
+        BodyBuilder::setData([
+            "nomor_sep" => $sep,
+            "special_cmg" => $specialCmg,
+        ]);
+
+        // 2. Kirim request ke E-Klaim
+        $response = EklaimService::send(BodyBuilder::prepared());
+        $decodedResponse = $this->decodeResponse($response);
+
+        // 3. Logging & Simpan ke DB (dengan tipe baru)
+        Log::info("INACBG GROUPER STAGE 2", ["sep" => $sep, "response" => $decodedResponse]);
+        $this->saveReqResIdrg($sep, BodyBuilder::prepared(), $decodedResponse, 'grouper_inacbg_stage2');
+
+        // ===================================================================
+        // BAGIAN BARU: Perbarui tabel grouping dengan hasil Stage 2
+        // ===================================================================
+        try {
+            // Ekstrak data tarif baru dari response
+            $updatedGroupingData = [
+                "no_sep"    => $sep,
+                "code_cbg"  => data_get($decodedResponse, 'response_inacbg.cbg.code'),
+                "deskripsi" => data_get($decodedResponse, 'response_inacbg.cbg.description'),
+                "tarif"     => data_get($decodedResponse, 'response_inacbg.tariff'), // Ambil tarif total yang baru
+            ];
+
+            // Lakukan update hanya jika ada data CBG baru di dalam response
+            if ($updatedGroupingData['code_cbg']) {
+                 \Illuminate\Support\Facades\DB::transaction(function () use ($sep, $updatedGroupingData) {
+                    \App\Models\InacbgGropingStage12::where('no_sep', $sep)->delete();
+                    \App\Models\InacbgGropingStage12::create($updatedGroupingData);
+                }, 5);
+                
+                Log::channel(config('eklaim.log_channel'))->info("UPDATE HASIL GROUPING STAGE 2 KE DB", $updatedGroupingData);
+            }
+        } catch (\Throwable $th) {
+            Log::channel(config('eklaim.log_channel'))->error("GAGAL UPDATE HASIL GROUPING STAGE 2 KE DB", [
+                "error" => $th->getMessage(),
+            ]);
+            // Jangan hentikan proses utama jika hanya update tabel ini yang gagal
+        }
+
+        // 4. Kirim kembali response lengkap ke frontend
+        // Response ini mungkin berisi tarif baru dan detail lainnya
+        return response()->json($decodedResponse, 200);
+
+    } catch (\Throwable $e) {
+        Log::error("INACBG GROUPER STAGE 2 ERROR", ["sep" => $sep, "message" => $e->getMessage()]);
+        return response()->json(["message" => "Gagal grouping stage 2: " . $e->getMessage()], 500);
     }
 }
 
@@ -465,7 +577,10 @@ public function final(Request $request, $sep)
 
         // 🔹 hapus kolom reedit_res di record SEP ini
         RsiaReqResIdrg::where('no_sep', $sep)->update([
-            'reedit_res' => null
+            'reedit_req' => null,
+            'reedit_res' => null,
+            'grouper_inacbg_stage1_req' => null,
+            'grouper_inacbg_stage1_res' => null,
         ]);
 
         // Beri respons balik ke FE
@@ -482,6 +597,110 @@ public function final(Request $request, $sep)
                 "code"    => 500,
                 "message" => "Terjadi kesalahan saat memproses final grouper: " . $e->getMessage(),
             ],
+        ], 500);
+    }
+}
+
+public function finalInacbg(Request $request, string $sep)
+{
+    try {
+        // 1. Bangun payload sesuai dengan request dari frontend
+        BodyBuilder::setMetadata("inacbg_grouper_final");
+        BodyBuilder::setData([
+            "nomor_sep" => $sep
+        ]);
+
+        // 2. Kirim request ke service E-Klaim
+        $finalInacbgResponse = EklaimService::send(BodyBuilder::prepared());
+        $finalInacbgDecoded  = $this->decodeResponse($finalInacbgResponse);
+
+        // 3. Logging untuk histori dan debugging
+        Log::channel(config('eklaim.log_channel'))->info("INACBG FINAL GROUPER", [
+            "sep"      => $sep,
+            "request"  => json_decode(json_encode(BodyBuilder::prepared()), true),
+            "response" => $finalInacbgDecoded,
+        ]);
+
+        // 4. Siapkan data untuk disimpan ke database
+        $requestData = json_decode(json_encode(BodyBuilder::prepared()), true);
+        $responseData = json_decode(json_encode($finalInacbgDecoded), true);
+
+        // 5. Simpan request & response ke tabel (disarankan membuat kolom baru atau tipe baru)
+        // Di sini saya asumsikan Anda menyimpan dengan tipe 'final_inacbg'
+        $this->saveReqResIdrg($sep, $requestData, $responseData, 'final_inacbg');
+
+        // 6. (Opsional) Lakukan pembersihan data yang sudah tidak relevan
+        // Misalnya, jika ada kolom re-edit untuk INACBG di masa depan.
+        RsiaReqResIdrg::where('no_sep', $sep)->update([
+            'reedit_inacbg_req' => null,
+            'reedit_inacbg_res' => null,
+        ]);
+
+        // 7. Berikan respons kembali ke frontend
+        return response()->json($finalInacbgDecoded, 200);
+
+    } catch (\Throwable $e) {
+        // Tangani jika terjadi error
+        Log::channel(config('eklaim.log_channel'))->error("INACBG FINAL GROUPER ERROR", [
+            "sep"      => $sep,
+            "message"  => $e->getMessage(),
+            "trace"    => $e->getTraceAsString(),
+        ]);
+
+        return response()->json([
+            "metadata" => [
+                "code"    => 500,
+                "message" => "Terjadi kesalahan saat memproses final grouper INA-CBG: " . $e->getMessage(),
+            ],
+        ], 500);
+    }
+}
+
+public function finalKlaim(Request $request, string $sep)
+{
+    try {
+        // $user = \Illuminate\Support\Facades\Auth::user();
+        $coderNik = "3326105603750002";
+
+        // 3. Bangun payload untuk dikirim ke E-Klaim
+        BodyBuilder::setMetadata("claim_final");
+        BodyBuilder::setData([
+            "nomor_sep" => $sep,
+            "coder_nik" => $coderNik,
+        ]);
+
+        // 4. Kirim request ke service E-Klaim
+        $claimFinalResponse = EklaimService::send(BodyBuilder::prepared());
+        $claimFinalDecoded  = $this->decodeResponse($claimFinalResponse);
+
+        // 5. Logging
+        Log::channel(config('eklaim.log_channel'))->info("CLAIM FINAL", [
+            "sep"      => $sep,
+            "coder_nik"=> $coderNik,
+            "request"  => json_decode(json_encode(BodyBuilder::prepared()), true),
+            "response" => $claimFinalDecoded,
+        ]);
+
+        // 6. Simpan request & response ke database Anda
+        $this->saveReqResIdrg($sep, BodyBuilder::prepared(), $claimFinalDecoded, 'final_klaim');
+
+        RsiaReqResIdrg::where('no_sep', $sep)->update([
+            'reedit_klaim_req' => null,
+            'reedit_klaim_res' => null,
+            'send_klaim_req' => null,
+            'send_klaim_res' => null,
+        ]);
+
+        // 7. Berikan respons kembali ke frontend
+        return response()->json($claimFinalDecoded, 200);
+
+    } catch (\Throwable $e) {
+        // Tangani error
+        Log::channel(config('eklaim.log_channel'))->error("CLAIM FINAL ERROR", [
+            "sep" => $sep, "message" => $e->getMessage()
+        ]);
+        return response()->json([
+            "message" => "Terjadi kesalahan pada server: " . $e->getMessage()
         ], 500);
     }
 }
@@ -513,6 +732,18 @@ public function reEditIdrg(Request $request, $no_sep)
             'reedit'
         );
 
+         // 🔹 hapus kolom reedit_res di record SEP ini
+        RsiaReqResIdrg::where('no_sep', $no_sep)->update([
+            'final_req' => null,
+            'final_res' => null,
+            'reedit_klaim_req' => null,
+            'reedit_klaim_res' => null,
+            'reedit_inacbg_req' => null,
+            'reedit_inacbg_res' => null,
+            'grouper_inacbg_stage1_req' => null,
+            'grouper_inacbg_stage1_res' => null,
+        ]);
+
         return response()->json($reeditDecoded, 200);
     } catch (\Throwable $e) {
         Log::channel(config('eklaim.log_channel'))->error("IDRG REEDIT ERROR", [
@@ -524,6 +755,190 @@ public function reEditIdrg(Request $request, $no_sep)
                 "code"    => 500,
                 "message" => "Gagal reedit IDRG: " . $e->getMessage(),
             ]
+        ], 500);
+    }
+}
+
+public function reeditInacbg(Request $request, string $sep)
+{
+    try {
+        // 1. Bangun payload sesuai dengan request dari frontend
+        BodyBuilder::setMetadata("inacbg_grouper_reedit");
+        BodyBuilder::setData([
+            "nomor_sep" => $sep
+        ]);
+
+        // 2. Kirim request ke service E-Klaim
+        $reeditInacbgResponse = EklaimService::send(BodyBuilder::prepared());
+        $reeditInacbgDecoded  = $this->decodeResponse($reeditInacbgResponse);
+
+        // 3. Logging untuk histori dan debugging
+        Log::channel(config('eklaim.log_channel'))->info("INACBG RE-EDIT GROUPER", [
+            "sep"      => $sep,
+            "request"  => json_decode(json_encode(BodyBuilder::prepared()), true),
+            "response" => $reeditInacbgDecoded,
+        ]);
+        
+        // 4. Siapkan data untuk disimpan ke database
+        $requestData = json_decode(json_encode(BodyBuilder::prepared()), true);
+        $responseData = json_decode(json_encode($reeditInacbgDecoded), true);
+
+        // 5. Simpan request & response ke tabel dengan tipe 'reedit_inacbg'
+        $this->saveReqResIdrg($sep, $requestData, $responseData, 'reedit_inacbg');
+
+        // 6. HAPUS status final INA-CBG yang lama dari database
+        // Ini adalah langkah kunci agar frontend tahu klaim sudah tidak final lagi.
+        if (($reeditInacbgDecoded['metadata']['code'] ?? 500) == 200) {
+            RsiaReqResIdrg::where('no_sep', $sep)->update([
+                'final_inacbg_req' => null,
+                'final_inacbg_res' => null,
+                'reedit_klaim_req' => null,
+                'reedit_klaim_res' => null,
+                
+            ]);
+        }
+
+        // 7. Berikan respons kembali ke frontend
+        return response()->json($reeditInacbgDecoded, 200);
+
+    } catch (\Throwable $e) {
+        // Tangani jika terjadi error
+        Log::channel(config('eklaim.log_channel'))->error("INACBG RE-EDIT GROUPER ERROR", [
+            "sep"      => $sep,
+            "message"  => $e->getMessage(),
+            "trace"    => $e->getTraceAsString(),
+        ]);
+
+        return response()->json([
+            "metadata" => [
+                "code"    => 500,
+                "message" => "Terjadi kesalahan saat memproses re-edit grouper INA-CBG: " . $e->getMessage(),
+            ],
+        ], 500);
+    }
+}
+
+// Tambahkan method baru ini di Controller PHP Anda
+public function reeditKlaim(Request $request, string $sep)
+{
+    try {
+        // 1. Bangun payload untuk dikirim ke E-Klaim
+        BodyBuilder::setMetadata("reedit_claim");
+        BodyBuilder::setData([
+            "nomor_sep" => $sep
+        ]);
+
+        // 2. Kirim request ke service E-Klaim
+        $reeditResponse = EklaimService::send(BodyBuilder::prepared());
+        $reeditDecoded  = $this->decodeResponse($reeditResponse);
+
+        // 3. Logging
+        Log::channel(config('eklaim.log_channel'))->info("RE-EDIT CLAIM (TOTAL)", [
+            "sep"      => $sep,
+            "response" => $reeditDecoded,
+        ]);
+
+        // 4. Simpan request & response ke DB
+        $this->saveReqResIdrg($sep, BodyBuilder::prepared(), $reeditDecoded, 'reedit_klaim');
+
+        // 5. KUNCI UTAMA: Hapus semua status final dari database untuk SEP ini
+        if (($reeditDecoded['metadata']['code'] ?? 500) == 200) {
+            RsiaReqResIdrg::where('no_sep', $sep)->update([
+                // 'final_res'         => null,
+                // 'final_req'         => null,
+                // 'final_inacbg_res'  => null,
+                // 'final_inacbg_req'  => null,
+                'final_klaim_res'   => null,
+                'final_klaim_req'   => null,
+            ]);
+        }
+
+        // 6. Berikan respons kembali ke frontend
+        return response()->json($reeditDecoded, 200);
+
+    } catch (\Throwable $e) {
+        Log::channel(config('eklaim.log_channel'))->error("RE-EDIT CLAIM (TOTAL) ERROR", ["sep" => $sep, "message" => $e->getMessage()]);
+        return response()->json(["message" => "Gagal memproses edit ulang klaim: " . $e->getMessage()], 500);
+    }
+}
+
+// Tambahkan method baru ini di Controller PHP Anda
+public function sendClaim(Request $request, string $sep)
+{
+    try {
+        // 1. Bangun payload untuk dikirim ke E-Klaim
+        BodyBuilder::setMetadata("send_claim_individual");
+        BodyBuilder::setData([
+            "nomor_sep" => $sep
+        ]);
+
+        // 2. Kirim request ke service E-Klaim
+        $response = EklaimService::send(BodyBuilder::prepared());
+        $decodedResponse  = $this->decodeResponse($response);
+
+        // 3. Logging
+        Log::channel(config('eklaim.log_channel'))->info("SEND CLAIM INDIVIDUAL", [
+            "sep"      => $sep,
+            "request"  => json_decode(json_encode(BodyBuilder::prepared()), true),
+            "response" => $decodedResponse,
+        ]);
+
+        // 4. Simpan request & response ke database Anda
+        $this->saveReqResIdrg(
+            $sep,
+            json_decode(json_encode(BodyBuilder::prepared()), true),
+            $decodedResponse,
+            'send_claim' // Tipe baru untuk rekam jejak
+        );
+
+        // 5. Berikan respons kembali ke frontend
+        return response()->json($decodedResponse, 200);
+
+    } catch (\Throwable $e) {
+        Log::channel(config('eklaim.log_channel'))->error("SEND CLAIM INDIVIDUAL ERROR", [
+            "sep"      => $sep,
+            "message"  => $e->getMessage(),
+        ]);
+        return response()->json([
+            "message" => "Gagal mengirim klaim individual: " . $e->getMessage()
+        ], 500);
+    }
+}
+
+// Tambahkan method baru ini di Controller PHP Anda
+public function printClaim(Request $request, string $sep)
+{
+    try {
+        // 1. Bangun payload untuk dikirim ke E-Klaim
+        BodyBuilder::setMetadata("claim_print");
+        BodyBuilder::setData([
+            "nomor_sep" => $sep
+        ]);
+
+        // 2. Kirim request ke service E-Klaim
+        $response = EklaimService::send(BodyBuilder::prepared());
+        $decodedResponse  = $this->decodeResponse($response);
+
+        // 3. Logging (opsional, kita singkat responsnya agar log tidak besar)
+        Log::channel(config('eklaim.log_channel'))->info("PRINT CLAIM", [
+            "sep"      => $sep,
+            "response_code" => $decodedResponse['metadata']['code'] ?? null,
+        ]);
+
+        // Catatan: Tidak disarankan menyimpan response base64 ke database karena ukurannya besar.
+        // Cukup teruskan ke frontend.
+        // $this->saveReqResIdrg($sep, ..., 'print_claim');
+
+        // 4. Berikan respons (yang berisi base64) kembali ke frontend
+        return response()->json($decodedResponse, 200);
+
+    } catch (\Throwable $e) {
+        Log::channel(config('eklaim.log_channel'))->error("PRINT CLAIM ERROR", [
+            "sep"      => $sep,
+            "message"  => $e->getMessage(),
+        ]);
+        return response()->json([
+            "message" => "Gagal memproses cetak klaim: " . $e->getMessage()
         ], 500);
     }
 }
@@ -556,6 +971,17 @@ public function importIdrgToInacbg(Request $request, $no_sep)
                 json_decode(json_encode($importDecoded), true),
                 'import_idrg_to_inacbg' // tipe log baru
             );
+
+             // 5. KUNCI UTAMA: Hapus semua status final dari database untuk SEP ini
+        if (($importDecoded['metadata']['code'] ?? 500) == 200) {
+            RsiaReqResIdrg::where('no_sep', $no_sep)->update([
+                'inacbg_diagnosa_req'       => null,
+                'inacbg_diagnosa_res'       => null,
+                'inacbg_procedure_req'       => null,
+                'inacbg_procedure_res'       => null,
+              
+            ]);
+        }
 
             // Kembalikan response ke Frontend
             // Response ini diasumsikan berisi data diagnosa & prosedur yang akan ditampilkan
@@ -825,6 +1251,36 @@ private function saveReqResIdrg(string $sep, array $requestData, ?array $respons
             $updateData['grouper_inacbg_stage1_req'] = json_encode($requestData ?? [], JSON_UNESCAPED_UNICODE);
             $updateData['grouper_inacbg_stage1_res'] = json_encode($responseData ?? [], JSON_UNESCAPED_UNICODE);
             break;
+
+        case 'grouper_inacbg_stage2':
+            $updateData['grouper_inacbg_stage2_req'] = json_encode($requestData ?? [], JSON_UNESCAPED_UNICODE);
+            $updateData['grouper_inacbg_stage2_res'] = json_encode($responseData ?? [], JSON_UNESCAPED_UNICODE);
+        break;
+
+        case 'final_inacbg':
+            $updateData['final_inacbg_req'] = json_encode($requestData ?? [], JSON_UNESCAPED_UNICODE);
+            $updateData['final_inacbg_res'] = json_encode($responseData ?? [], JSON_UNESCAPED_UNICODE);
+        break;
+
+        case 'reedit_inacbg':
+            $updateData['reedit_inacbg_req'] = json_encode($requestData ?? [], JSON_UNESCAPED_UNICODE);
+            $updateData['reedit_inacbg_res'] = json_encode($responseData ?? [], JSON_UNESCAPED_UNICODE);
+        break;
+
+        case 'final_klaim':
+            $updateData['final_klaim_req'] = json_encode($requestData ?? [], JSON_UNESCAPED_UNICODE);
+            $updateData['final_klaim_res'] = json_encode($responseData ?? [], JSON_UNESCAPED_UNICODE);
+        break;
+
+        case 'reedit_klaim':
+            $updateData['reedit_klaim_req'] = json_encode($requestData ?? [], JSON_UNESCAPED_UNICODE);
+            $updateData['reedit_klaim_res'] = json_encode($responseData ?? [], JSON_UNESCAPED_UNICODE);
+        break;
+
+        case 'send_claim':
+            $updateData['send_klaim_req'] = json_encode($requestData ?? [], JSON_UNESCAPED_UNICODE);
+            $updateData['send_klaim_res'] = json_encode($responseData ?? [], JSON_UNESCAPED_UNICODE);
+        break;
     }
 
     \App\Models\RsiaReqResIdrg::updateOrCreate(
