@@ -182,7 +182,7 @@ class KlaimController extends Controller
 
                 // ==================================================== SAVE DATAS
 
-                // $this->saveDiagnosaAndProcedures($data);
+                $this->saveDiagnosaAndProcedures($data);
                 $this->saveChunksData($data);
 
                 // simpan request & response set_claim
@@ -349,6 +349,16 @@ public function setGroupingInacbg(Request $request, string $sep)
 {
     try {
         // ===================================================================
+        // BAGIAN BARU: Memanggil saveDiagnosaAndProcedures
+        // ===================================================================
+        // Parse data klaim lengkap dari request
+        $klaimData = \Halim\EKlaim\Helpers\ClaimDataParser::parseClaim($request);
+        // Tambahkan nomor SEP ke dalam array data
+        // Panggil method untuk menyimpan diagnosa & prosedur ke database lokal
+        // $this->saveDiagnosaAndProcedures($klaimData);
+        // ===================================================================
+
+        // ===================================================================
         // LANGKAH 1: KIRIM DIAGNOSA
         // ===================================================================
         $diagnosaData = \Halim\EKlaim\Helpers\ClaimDataParser::parseDiagnosis($request);
@@ -386,6 +396,10 @@ public function setGroupingInacbg(Request $request, string $sep)
 
         $procedureResponse = EklaimService::send(BodyBuilder::prepared());
         $procedureDecoded  = $this->decodeResponse($procedureResponse);
+
+        $klaimData = array_merge($klaimData, $diagnosaData, $procedureData);
+        $klaimData['nomor_sep'] = $sep;
+        $this->saveDiagnosaAndProcedures($klaimData);
 
         // Logging
         Log::info("INA-CBG PROCEDURE SET", [
@@ -1297,8 +1311,8 @@ private function saveReqResIdrg(string $sep, array $requestData, ?array $respons
     private function saveDiagnosaAndProcedures($klaim_data)
     {
         try {
-            $explodedDiagnosa   = explode("#", $klaim_data['diagnosa']);
-            $explodedProcedures = explode("#", $klaim_data['procedure']);
+            $explodedDiagnosa   = explode("#", $klaim_data['diagnosa'] ?? '');
+            $explodedProcedures = explode("#", $klaim_data['procedure'] ?? '');
 
             $no_rawat = \App\Models\BridgingSep::where('no_sep', $klaim_data['nomor_sep'])->first()->no_rawat;
 
