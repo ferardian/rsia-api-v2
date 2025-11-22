@@ -22,6 +22,7 @@ Route::middleware(['user-aes', 'detail-user', 'claim:role,pegawai|dokter'])->gro
     Route::post('/sep/klaim/status/search', [\App\Http\Controllers\v2\StatusKlaimSepController::class, 'search']);
 
     Route::resource('/sep/{no_sep}/klaim/latest', \App\Http\Controllers\v2\HasilGroupingController::class)->only(['index']);
+    
 });
 
 Route::middleware(['user-aes', 'detail-user', 'claim:role,pegawai|dokter'])->group(function ($router) {

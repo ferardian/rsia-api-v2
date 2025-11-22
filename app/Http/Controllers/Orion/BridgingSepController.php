@@ -126,6 +126,8 @@ class BridgingSepController extends \Orion\Http\Controllers\Controller
             'terkirim_online',
             'status_klaim.log',
 
+            'rsia_klaim_idrg',
+            
             'reg_periksa',
             'reg_periksa.dokter',
             'reg_periksa.poliklinik',

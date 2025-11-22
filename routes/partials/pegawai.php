@@ -9,7 +9,8 @@ Route::middleware(['auth:aes', 'claim:role,pegawai|dokter'])->group(function () 
   
   // ==================== PEGAWAI
   Orion::resource('pegawai', \App\Http\Controllers\Orion\PegawaiController::class)->only(['search', 'show']);
-  Route::resource('pegawai', \App\Http\Controllers\v2\PegawaiController::class)->except(['create', 'edit', 'show'])->parameters(['pegawai' => 'nik']);
+  Route::resource('pegawai', \App\Http\Controllers\v2\PegawaiController::class)->except(['create', 'edit'])->parameters(['pegawai' => 'nik']);
+  Route::get('pegawai-ktp/{kd_dokter}', [\App\Http\Controllers\v2\PegawaiController::class, 'getKtpNumber'])->name('pegawai.get.ktp');
 
   // ==================== UPDATE PROFILE PEGAWAI
   Orion::belongsToManyResource('pegawai', 'cuti', \App\Http\Controllers\Orion\CutiPegawaiController::class)->only(['search'])->parameters(['pegawai' => 'nik', 'cuti' => 'id_cuti']);

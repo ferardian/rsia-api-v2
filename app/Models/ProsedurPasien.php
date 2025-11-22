@@ -28,4 +28,10 @@ class ProsedurPasien extends Model
     {
         return $this->belongsTo(Icd9::class, 'kode', 'kode');
     }
+
+    // Tambahkan relasi lain jika ada (misal ke RegPeriksa)
+    public function regPeriksa()
+    {
+        return $this->belongsTo(RegPeriksa::class, 'no_rawat', 'no_rawat');
+    }
 }

@@ -257,7 +257,7 @@ class BridgingSep extends Model
      * */
     public function pasien()
     {
-        return $this->belongsTo(Pasien::class, 'nomr', 'no_rkm_medis')->select('no_rkm_medis', 'nm_pasien', 'tgl_lahir', 'jk', 'no_peserta', 'kd_pj');
+        return $this->belongsTo(Pasien::class, 'nomr', 'no_rkm_medis');
     }
 
     /**
@@ -338,5 +338,16 @@ class BridgingSep extends Model
     public function prosedur()
     {
         return $this->hasMany(ProsedurPasien::class, 'no_rawat', 'no_rawat')->orderBy('prioritas');
+    }
+
+    public function rsia_klaim_idrg()
+    {
+        return $this->belongsTo(RsiaReqResIdrg::class, 'no_sep', 'no_sep');
+    }
+
+  
+    public function codingCasemix()
+    {
+        return $this->hasOne(CodingCasemix::class, 'no_sep', 'no_sep');
     }
 }

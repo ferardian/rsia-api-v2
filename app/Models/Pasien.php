@@ -100,7 +100,7 @@ class Pasien extends Authenticatable
 
     protected $primaryKey = 'no_rkm_medis';
 
-    protected $hidden = ['no_ktp', 'no_peserta'];
+    protected $hidden = ['no_peserta'];
 
     protected $guarded = [];
 
@@ -112,6 +112,46 @@ class Pasien extends Authenticatable
     public $timestamps = false;
 
     public $incrementing = false;
+
+    /**
+     * Get the kabupaten that owns the pasien.
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
+     */
+    public function kabupaten()
+    {
+        return $this->belongsTo(Kabupaten::class, 'kd_kab', 'kd_kab');
+    }
+
+    /**
+     * Get the kecamatan that owns the pasien.
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
+     */
+    public function kecamatan()
+    {
+        return $this->belongsTo(Kecamatan::class, 'kd_kec', 'kd_kec');
+    }
+
+    /**
+     * Get the kelurahan that owns the pasien.
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
+     */
+    public function kelurahan()
+    {
+        return $this->belongsTo(Kelurahan::class, 'kd_kel', 'kd_kel');
+    }
+
+    /**
+     * Get the propinsi that owns the pasien.
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
+     */
+    public function propinsi()
+    {
+        return $this->belongsTo(Propinsi::class, 'kd_prop', 'kd_prop');
+    }
 
     /**
      * Specifies the user's FCM tokens

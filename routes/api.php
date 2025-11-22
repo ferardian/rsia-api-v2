@@ -15,6 +15,7 @@ use App\Http\Controllers\v2\RsiaOtpController;
 |
 */
 
+
 Route::get('/', function (Request $request) {
     try {
         $c = \Illuminate\Support\Facades\DB::connection()->getPdo();
@@ -66,6 +67,23 @@ Route::prefix('otp')->middleware(['detail-user', 'claim:role,pegawai|dokter|pasi
 });
 // ======== END OTP ========
 
+// Temporary test route for satu_sehat_mapping_lab
+Route::get('/test-mapping-templates', function () {
+    try {
+        $templateMappings = \DB::table('satu_sehat_mapping_lab')->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => $templateMappings
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'error' => $e->getMessage()
+        ], 500);
+    }
+});
+
 $files = scandir(__DIR__ . '/partials');
 foreach ($files as $file) {
     // if file is not a directory
@@ -77,3 +95,4 @@ foreach ($files as $file) {
 
 require_once __DIR__ . '/eklaim-api.php';
 require_once __DIR__ . '/oauth-api.php';
+require_once __DIR__ . '/bpjs-api.php';

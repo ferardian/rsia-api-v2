@@ -149,7 +149,8 @@ class RegPeriksa extends Model
     public function pasien()
     {
         return $this->belongsTo(Pasien::class, 'no_rkm_medis', 'no_rkm_medis')
-            ->select('no_rkm_medis', 'nm_pasien', 'jk', 'tmp_lahir', 'tgl_lahir', 'alamat', 'no_tlp', 'no_ktp', 'agama', 'pekerjaan');
+            ->select('no_rkm_medis', 'nm_pasien', 'jk', 'tmp_lahir', 'tgl_lahir', 'alamat', 'no_tlp', 'no_ktp', 'agama', 'pekerjaan', 'kd_kab', 'kabupatenpj', 'kd_kec', 'kecamatanpj', 'kd_prop', 'propinsipj')
+            ->with(['kabupaten', 'kecamatan', 'kelurahan', 'propinsi']);
     }
 
     /**
@@ -170,7 +171,9 @@ class RegPeriksa extends Model
      */
     public function dokter()
     {
-        return $this->belongsTo(Dokter::class, 'kd_dokter', 'kd_dokter')->select('kd_dokter', 'nm_dokter', 'kd_sps');
+        return $this->belongsTo(Dokter::class, 'kd_dokter', 'kd_dokter')
+            ->select('kd_dokter', 'nm_dokter', 'kd_sps', 'jk', 'tmp_lahir', 'tgl_lahir', 'no_telp', 'no_ijn_praktek')
+            ->with(['pegawai.petugas']);
     }
 
     /**
@@ -280,10 +283,10 @@ class RegPeriksa extends Model
      * 
      * @return \Illuminate\Database\Eloquent\Relations\HasMany
      * */
-    public function prosedurPasien()
-    {
-        return $this->hasMany(ProsedurPasien::class, 'no_rawat', 'no_rawat');
-    }
+        public function prosedurPasien()
+        {
+            return $this->hasMany(ProsedurPasien::class, 'no_rawat', 'no_rawat');
+        }   
 
     /**
      * Get the catatan perawatan that owns the registrasi.
@@ -308,5 +311,16 @@ class RegPeriksa extends Model
     public function sepSimple()
     {
         return $this->hasOne(BridgingSep::class, 'no_rawat', 'no_rawat')->select('no_rawat', 'no_sep', 'tglsep');
+    }
+
+    /**
+     * Get the nota jalan that owns the registrasi.
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\HasOne
+     * */
+    public function notaJalan()
+    {
+        return $this->hasOne(NotaJalan::class, 'no_rawat', 'no_rawat')
+            ->select('no_rawat', 'tanggal', 'jam');
     }
 }

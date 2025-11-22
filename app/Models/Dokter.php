@@ -80,7 +80,8 @@ class Dokter extends Model
 
     public function pegawai()
     {
-        return $this->belongsTo(Pegawai::class, 'kd_dokter', 'nik')->select('id', 'nik', 'nama', 'jk' ,'photo');
+        return $this->belongsTo(Pegawai::class, 'kd_dokter', 'nik')
+                   ->select('id', 'nik', 'nama', 'jk', 'photo', 'no_ktp');
     }
 
     public function sidikjari()

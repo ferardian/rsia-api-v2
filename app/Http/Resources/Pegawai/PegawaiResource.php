@@ -14,6 +14,12 @@ class PegawaiResource extends JsonResource
      */
     public function toArray($request)
     {
-        return parent::toArray($request);
+        // Get all fields from model + ensure no_ktp is included
+        $data = parent::toArray($request);
+
+        // Explicitly include no_ktp field
+        $data['no_ktp'] = $this->no_ktp ?? null;
+
+        return $data;
     }
 }

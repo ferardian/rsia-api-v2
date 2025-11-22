@@ -30,4 +30,16 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    'bpjs' => [
+        'cons_id'     => env('BPJS_CONS_ID'),
+        'cons_secret' => env('BPJS_CONS_SECRET'),
+        'user_key'    => env('BPJS_USER_KEY'),
+        'base_url'    => env('BPJS_BASE_URL'), // URL dasar dari API BPJS
+        'kode_faskes' => env('BPJS_KODE_FASKES'), // Kode faskes rumah sakit
+    ],
+
+    'snowstorm' => [
+        'url' => env('SNOWSTORM_URL', 'http://localhost:8080'),
+    ],
+
 ];

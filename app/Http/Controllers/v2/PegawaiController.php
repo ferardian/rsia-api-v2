@@ -82,13 +82,52 @@ class PegawaiController extends Controller
 
     /**
      * Menampilkan data pegawai berdasarkan NIK.
-     * 
+     *
      * @queryParam select string Kolom yang ingin ditampilkan. Defaults to '*'. Example: nik,nama
      *
      * @param  string  $id NIK pegawai. Example: 3.928.0623
      * @return \App\Http\Resources\Pegawai\CompleteResource
      */
-    public function show($id, Request $request) {}
+    public function show($id, Request $request)
+    {
+        $select = $request->query('select', '*');
+
+        // Pastikan no_ktp selalu include dalam select
+        if ($select === '*') {
+            $select = 'nik,nama,jk,jbtn,no_ktp,photo';
+        } else {
+            $fields = explode(',', $select);
+            if (!in_array('no_ktp', $fields)) {
+                $fields[] = 'no_ktp';
+            }
+            $select = implode(',', $fields);
+        }
+
+        // Debug: log apa yang ada di database
+        $pegawaiRaw = \App\Models\Pegawai::where('nik', $id)->first();
+        \Log::info('Raw pegawai data for nik ' . $id, [
+            'nik' => $pegawaiRaw->nik ?? 'null',
+            'no_ktp' => $pegawaiRaw->no_ktp ?? 'null',
+            'all_data' => $pegawaiRaw ? $pegawaiRaw->toArray() : 'not found'
+        ]);
+
+        $pegawai = \App\Models\Pegawai::select(explode(',', $select))
+            ->where('nik', $id)
+            ->first();
+
+        if (!$pegawai) {
+            return \App\Helpers\ApiResponse::notFound('Pegawai not found');
+        }
+
+        $result = new \App\Http\Resources\Pegawai\CompleteResource($pegawai);
+
+        // Debug: log hasil resource
+        \Log::info('CompleteResource result', [
+            'result' => $result->toArray($request)
+        ]);
+
+        return $result;
+    }
 
     /**
      * Menampilkan form untuk mengedit pegawai.
@@ -234,6 +273,38 @@ class PegawaiController extends Controller
         }
 
         return \App\Helpers\ApiResponse::success('Data updated successfully');
+    }
+
+    /**
+     * Get real KTP number (pegawai.no_ktp) based on doctor kd_dokter = pegawai.nik
+     * kd_dokter = NIP (nomor pegawai)
+     * no_ktp = NIK (nomor KTP, 16 digit)
+     */
+    public function getKtpNumber($kdDokter, Request $request)
+    {
+        \Log::info('Getting KTP number for doctor kd_dokter (NIP): ' . $kdDokter);
+
+        // Query pegawai where nik (NIP) = kd_dokter
+        $pegawai = \App\Models\Pegawai::select('nik', 'nama', 'no_ktp')
+            ->where('nik', $kdDokter)
+            ->first();
+
+        if (!$pegawai) {
+            \Log::info('Pegawai not found for kd_dokter: ' . $kdDokter);
+            return \App\Helpers\ApiResponse::notFound('Pegawai not found for kd_dokter: ' . $kdDokter);
+        }
+
+        \Log::info('Found pegawai with KTP data', [
+            'nik' => $pegawai->nik,          // NIP
+            'nama' => $pegawai->nama,        // nama pegawai
+            'no_ktp' => $pegawai->no_ktp     // NIK (nomor KTP)
+        ]);
+
+        return \App\Helpers\ApiResponse::success('KTP number retrieved', [
+            'nip' => $pegawai->nik,          // NIP pegawai
+            'nama' => $pegawai->nama,        // nama pegawai
+            'no_ktp' => $pegawai->no_ktp     // NO_KTP (nomor KTP asli, 16 digit)
+        ]);
     }
 
     private static function validationRule($withRequired = true)
