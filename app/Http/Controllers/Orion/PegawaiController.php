@@ -16,6 +16,40 @@ class PegawaiController extends Controller
     protected $model = \App\Models\Pegawai::class;
 
     /**
+     * Override index method to include role data via LEFT JOIN
+     */
+    public function index(Request $request)
+    {
+        // Build query with LEFT JOIN for roles
+        $query = $this->buildQuery($request);
+
+        // Add LEFT JOIN for role data
+        $query->leftJoin('rsia_user_role as ur', function($join) {
+            $join->on('ur.nip', '=', 'pegawai.nik')
+                 ->where('ur.is_active', 1);
+        })
+        ->leftJoin('rsia_role as r', 'ur.id_role', '=', 'r.id_role')
+        ->addSelect([
+            'r.id_role as role_id',
+            'r.nama_role as role_name'
+        ]);
+
+        // Apply filters, sorting, etc.
+        $this->applyFilters($query, $request);
+        $this->applySorting($query, $request);
+        $this->applyIncludes($query, $request);
+
+        // Get results
+        $models = $this->runIndexQuery($query, $request);
+
+        // Transform using custom collection resource
+        $resourceClass = $this->collectionResource ?? \Orion\Http\Resources\ResourcesCollection::class;
+        $resource = new $resourceClass($models);
+
+        return $resource->additional($this->indexMeta($request));
+    }
+
+    /**
      * @var string $resource
      */
     protected $resource = \App\Http\Resources\Pegawai\PegawaiResource::class;

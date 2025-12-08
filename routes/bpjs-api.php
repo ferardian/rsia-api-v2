@@ -19,4 +19,13 @@ Route::group(['middleware' => ['auth:aes']], function () {
 
     // Route untuk insert rekam medis ke BPJS
     Route::post('/bpjs/rekammedis/insert', [\App\Http\Controllers\v2\BpjsController::class, 'insertMedicalRecord']);
+
+    // Route untuk mendapatkan data ERM yang tersimpan
+    Route::get('/bpjs/erm/{noSep}', [\App\Http\Controllers\v2\BpjsController::class, 'getErmData']);
+
+    // Route untuk mendapatkan bundle ERM asli (sebelum enkripsi)
+    Route::get('/bpjs/erm/{noSep}/bundle', [\App\Http\Controllers\v2\BpjsController::class, 'getErmBundle']);
+
+    // Route untuk mendapatkan response BPJS
+    Route::get('/bpjs/erm/{noSep}/response', [\App\Http\Controllers\v2\BpjsController::class, 'getBpjsResponse']);
 });

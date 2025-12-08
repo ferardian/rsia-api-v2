@@ -29,17 +29,12 @@ class CodingCasemixController extends Controller
         $status = $validated['status'] ?? 'all';
 
         try {
-            // Query kunjungan pasien ini
+            // Query kunjungan pasien ini dengan relasi yang lebih sederhana
             $query = BridgingSep::with([
-                'reg_periksa.pasien',
-                'reg_periksa.dokter',
-                'reg_periksa.poliklinik',
                 'codingCasemix'
             ])
-            ->whereHas('reg_periksa', function($q) use ($noRkmMedis) {
-                $q->where('no_rkm_medis', $noRkmMedis)
-                  ->where('stts', 'Sudah'); // Hanya kunjungan yang sudah selesai
-            });
+            ->where('nomr', $noRkmMedis) // Langsung filter berdasarkan nomr
+            ->whereNotNull('no_rawat');
 
             // Filter by coding status
             if ($status === 'pending') {

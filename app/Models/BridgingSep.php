@@ -4,7 +4,6 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasOne;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 /**
  * App\Models\BridgingSep
@@ -207,27 +206,48 @@ class BridgingSep extends Model
 
     /**
      * Get the reg_periksa that owns the BridgingSep
-     * 
+     *
      * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
      * */
     public function reg_periksa()
     {
-        return $this->belongsTo(RegPeriksa::class, 'no_rawat', 'no_rawat')->select('no_rawat', 'tgl_registrasi', 'kd_dokter', 'jam_reg', 'no_reg', 'umurdaftar', 'sttsumur', 'status_poli', 'kd_poli');
+        return $this->belongsTo(RegPeriksa::class, 'no_rawat', 'no_rawat')
+            ->select('no_rawat', 'tgl_registrasi', 'kd_dokter', 'jam_reg', 'no_reg', 'umurdaftar', 'sttsumur', 'status_poli', 'kd_poli'); // Return default model dengan data kosong jika tidak ditemukan
     }
+
+  
 
     public function poliklinik()
     {
-        return $this->hasOneThrough(Poliklinik::class, RegPeriksa::class, 'no_rawat', 'kd_poli', 'no_rawat', 'kd_poli');
+        return $this->hasOneThrough(Poliklinik::class, RegPeriksa::class, 'no_rawat', 'kd_poli', 'no_rawat', 'kd_poli')
+            ->withDefault([
+                'kd_poli' => '',
+                'nm_poli' => '',
+                'png_jawab' => ''
+            ]);
     }
 
     /**
      * Get the dokter that owns the BridgingSep
-     * 
+     *
      * @return \Illuminate\Database\Eloquent\Relations\HasOneThrough
      * */
     public function dokter()
     {
-        return $this->hasOneThrough(Dokter::class, RegPeriksa::class, 'no_rawat', 'kd_dokter', 'no_rawat', 'kd_dokter');
+        return $this->hasOneThrough(Dokter::class, RegPeriksa::class, 'no_rawat', 'kd_dokter', 'no_rawat', 'kd_dokter')
+            ->withDefault([
+                'kd_dokter' => '',
+                'nm_dokter' => '',
+                'jk' => '',
+                'tmp_lahir' => '',
+                'tgl_lahir' => '',
+                'gol_drh' => '',
+                'agama' => '',
+                'almt_tgl' => '',
+                'no_telp' => '',
+                'stts_nikah' => '',
+                'kd_sps' => ''
+            ]);
     }
 
     /**
@@ -275,10 +295,10 @@ class BridgingSep extends Model
      * 
      * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
      * */
-    public function reqresidrg()
-    {
-        return $this->belongsTo(RsiaReqResIdrg::class, 'no_sep', 'no_sep');
-    }
+    // public function reqresidrg()
+    // {
+    //     return $this->belongsTo(RsiaReqResIdrg::class, 'no_sep', 'no_sep');
+    // }
 
     /**
      * Get the bridging_surat_kontrol_bpjs that owns the BridgingSep
@@ -342,12 +362,19 @@ class BridgingSep extends Model
 
     public function rsia_klaim_idrg()
     {
-        return $this->belongsTo(RsiaReqResIdrg::class, 'no_sep', 'no_sep');
+        // Prevent recursive loading by selecting specific columns only
+        return $this->belongsTo(RsiaReqResIdrg::class, 'no_sep', 'no_sep')
+            ->select(['no_sep', 'created_at', 'updated_at', 'set_claim_res', 'final_res']);
     }
 
   
     public function codingCasemix()
     {
         return $this->hasOne(CodingCasemix::class, 'no_sep', 'no_sep');
+    }
+
+    public function inacbgDataTerkirim()
+    {
+        return $this->hasOne(\App\Models\InacbgDataTerkirim::class, 'no_sep', 'no_sep');
     }
 }

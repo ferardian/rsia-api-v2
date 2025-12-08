@@ -28,6 +28,15 @@ class PegawaiCollection extends ResourceCollection
                 $modifieditem['dep'] = $item->dep;
             }
 
+            // Add role data from LEFT JOIN (already available from Orion controller)
+            $modifieditem['id_role'] = $item['role_id'] ? (int) $item['role_id'] : null;
+            $modifieditem['role_name'] = $item['role_name'] ?: 'Belum ada role';
+
+            // Add frontend-specific fields
+            $modifieditem['id_user'] = $item['nik']; // frontend expects id_user
+            $modifieditem['username'] = $item['nik']; // fallback to nik
+            $modifieditem['status'] = ($item['stts_aktif'] ?? '') === 'AKTIF' ? 1 : 0;
+
             return $modifieditem;
         });
 

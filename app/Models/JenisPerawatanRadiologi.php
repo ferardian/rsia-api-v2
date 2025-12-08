@@ -52,4 +52,12 @@ class JenisPerawatanRadiologi extends Model
     public $timestamps = false;
 
     public $incrementing = false;
+
+    /**
+     * Get the periksa radiologi records for this jenis perawatan.
+     */
+    public function periksaRadiologi()
+    {
+        return $this->hasMany(PeriksaRadiologi::class, 'kd_jenis_prw', 'kd_jenis_prw');
+    }
 }

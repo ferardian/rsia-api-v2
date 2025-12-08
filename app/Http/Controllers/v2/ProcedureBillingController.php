@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\v2;
 
 use App\Http\Controllers\Controller;
-use App\Helpers\ApiResponse;
 use App\Http\Resources\ProcedureBillingResource;
 use App\Models\ProcedureBilling;
 use Illuminate\Http\Request;
@@ -14,8 +13,6 @@ class ProcedureBillingController extends Controller
      * Display a listing of procedure billing for a specific visit.
      *
      * @queryParam no_rawat required Rawat visit number. Example: 2024/01/01/0001
-     * @queryParam page int Halaman yang ditampilkan. Defaults to 1. Example: 1
-     * @queryParam per_page int Jumlah data per halaman. Defaults to 10. Example: 10
      * @queryParam sort string Pengurutan berdasarkan kolom. Example: tgl_perawatan
      * @queryParam order string Urutan ascending/descending. Defaults to desc. Example: desc
      *
@@ -27,14 +24,13 @@ class ProcedureBillingController extends Controller
             'no_rawat' => 'required|string|exists:reg_periksa,no_rawat'
         ]);
 
-        $perPage = $request->query('per_page', 10);
         $sort = $request->query('sort', 'tgl_perawatan');
         $order = $request->query('order', 'desc');
 
         $query = ProcedureBilling::getProcedureBillingData($request->no_rawat)
             ->orderBy($sort, $order);
 
-        $procedures = $query->paginate($perPage);
+        $procedures = $query->get();
 
         return ProcedureBillingResource::collection($procedures);
     }

@@ -134,11 +134,21 @@ class PeriksaRadiologi extends Model
 
     /**
      * Get the dokter that owns the periksa radiologi.
-     * 
+     *
      * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
-     * */ 
+     * */
     public function dokter()
     {
         return $this->belongsTo(Dokter::class, 'kd_dokter', 'kd_dokter')->select('kd_dokter', 'nm_dokter');
+    }
+
+    /**
+     * Get the gambar radiologi for the periksa radiologi.
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\HasMany
+     * */
+    public function gambarRadiologi()
+    {
+        return $this->hasMany(GambarRadiologi::class, ['no_rawat', 'tgl_periksa', 'jam'], ['no_rawat', 'tgl_periksa', 'jam']);
     }
 }

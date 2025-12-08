@@ -4,6 +4,7 @@ namespace App\Http\Controllers\v2;
 
 use App\Helpers\SignHelper;
 use App\Http\Controllers\Controller;
+use App\Models\RsiaErmBpjs;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Validator;
@@ -292,6 +293,27 @@ class BpjsController extends Controller
         // Debug: Log FHIR Bundle info
         \Log::info('FHIR Bundle received: ' . json_encode($fhirBundle));
 
+        // Simpan bundle ERM sebelum enkripsi ke database
+        try {
+            \Log::info('Menyimpan bundle ERM ke database untuk SEP: ' . $payload['noSep']);
+
+            $requestMetadata = [
+                'jnsPelayanan' => $payload['jnsPelayanan'],
+                'bulan' => $payload['bulan'],
+                'tahun' => $payload['tahun'],
+                'bundle_entries_count' => isset($fhirBundle['entry']) ? count($fhirBundle['entry']) : 0,
+                'bundle_type' => $fhirBundle['resourceType'] ?? 'unknown',
+                'user_agent' => $request->userAgent(),
+                'ip_address' => $request->ip(),
+            ];
+
+            RsiaErmBpjs::saveErmRequest($payload['noSep'], $fhirBundle, $requestMetadata);
+            \Log::info('Bundle ERM berhasil disimpan ke database');
+        } catch (\Exception $e) {
+            \Log::error('Gagal menyimpan bundle ERM ke database: ' . $e->getMessage());
+            // Tetap lanjut proses meskipun gagal menyimpan ke database
+        }
+
         // Debug: Check Procedure note fields at initial reception - DETAILED ANALYSIS
         \Log::info('=== DETAILED PROCEDURE NOTE ANALYSIS ===');
         if (isset($fhirBundle['entry']) && is_array($fhirBundle['entry'])) {
@@ -431,13 +453,34 @@ class BpjsController extends Controller
             ->where('no_sep', $payload['noSep'])
             ->first();
 
-        $jnsPelayanan = $payload['jnsPelayanan']; // fallback ke payload
-        if ($sepData && $sepData->jnspelayanan) {
-            // Mapping dari bridging_sep ke BPJS format
+        // Debug log untuk mengetahui sumber data
+        \Log::info('Debug Jenis Pelayanan:');
+        \Log::info('Payload jnsPelayanan: ' . $payload['jnsPelayanan']);
+        \Log::info('Bridging SEP data found: ' . ($sepData ? 'YES' : 'NO'));
+
+        if ($sepData) {
+            \Log::info('Bridging SEP jnspelayanan: ' . $sepData->jnspelayanan);
+            \Log::info('Bridging SEP jnspelayanan type: ' . gettype($sepData->jnspelayanan));
+        }
+
+        $jnsPelayanan = $payload['jnsPelayanan']; // default dari payload
+
+        // Prioritaskan data yang lebih akurat: ERM bundle payload
+        // Fallback ke bridging_sep jika tidak sesuai
+        if ($payload['jnsPelayanan'] === '1' || $payload['jnsPelayanan'] === 1) {
+            // Payload mengirim rawat inap, gunakan 1
+            $jnsPelayanan = '1';
+            \Log::info('Using Rawat Inap (1) from payload - ERM bundle indicates inpatient');
+        } elseif ($payload['jnsPelayanan'] === '2' || $payload['jnsPelayanan'] === 2) {
+            // Payload mengirim rawat jalan, gunakan 2
+            $jnsPelayanan = '2';
+            \Log::info('Using Rawat Jalan (2) from payload - ERM bundle indicates outpatient');
+        } elseif ($sepData && $sepData->jnspelayanan) {
+            // Fallback ke bridging_sep jika payload tidak jelas
             $jnsPelayanan = strtolower($sepData->jnspelayanan) === 'rawat inap' ? '1' : '2';
-            \Log::info('Jenis pelayanan from bridging_sep: ' . $sepData->jnspelayanan . ' -> BPJS format: ' . $jnsPelayanan);
+            \Log::info('Using fallback from bridging_sep: ' . $sepData->jnspelayanan . ' -> BPJS format: ' . $jnsPelayanan);
         } else {
-            \Log::info('Using fallback jenis pelayanan from payload: ' . $jnsPelayanan);
+            \Log::info('Using default fallback jnsPelayanan from payload: ' . $jnsPelayanan);
         }
 
         // 6. Buat final payload sesuai format BPJS
@@ -496,7 +539,8 @@ class BpjsController extends Controller
 
         // 6. Kirim request ke BPJS
         // Use correct BPJS e-claim API endpoint with full path
-        $serviceUrl = $this->baseUrl . '/erekammedis_dev/eclaim/rekammedis/insert';
+        // $serviceUrl = $this->baseUrl . '/erekammedis_dev/eclaim/rekammedis/insert';
+        $serviceUrl = $this->baseUrl . '/medicalrecord/eclaim/rekammedis/insert';
 
         // Debug: Log service URL attempts
         \Log::info('BPJS Service URL: ' . $serviceUrl);
@@ -915,10 +959,55 @@ class BpjsController extends Controller
 
                 \Log::info('Retry Response Status: ' . $response->status());
                 \Log::info('Retry Response Body: ' . $response->body());
+
+                // Simpan retry response dari BPJS ke database
+                try {
+                    \Log::info('Menyimpan retry response BPJS ke database untuk SEP: ' . $payload['noSep']);
+
+                    $retryResponseMetadata = [
+                        'http_status' => $response->status(),
+                        'response_headers' => $response->headers(),
+                        'request_metadata' => [
+                            'service_url' => $serviceUrl,
+                            'timestamp' => $freshTimestamp,
+                            'payload_size' => strlen($requestJson),
+                            'is_retry' => true,
+                        ],
+                        'processing_time' => microtime(true) - LARAVEL_START,
+                    ];
+
+                    RsiaErmBpjs::saveErmResponse($payload['noSep'], $response->json(), $retryResponseMetadata);
+                    \Log::info('Retry response BPJS berhasil disimpan ke database');
+                } catch (\Exception $e) {
+                    \Log::error('Gagal menyimpan retry response BPJS ke database: ' . $e->getMessage());
+                    // Tetap lanjut proses meskipun gagal menyimpan ke database
+                }
             }
 
             // Return appropriate response based on BPJS API response
             $bpjsResponse = $response->json();
+
+            // Simpan response dari BPJS ke database
+            try {
+                \Log::info('Menyimpan response BPJS ke database untuk SEP: ' . $payload['noSep']);
+
+                $responseMetadata = [
+                    'http_status' => $response->status(),
+                    'response_headers' => $response->headers(),
+                    'request_metadata' => [
+                        'service_url' => $serviceUrl,
+                        'timestamp' => $signatureData['timestamp'],
+                        'payload_size' => strlen($requestJson),
+                    ],
+                    'processing_time' => microtime(true) - LARAVEL_START,
+                ];
+
+                RsiaErmBpjs::saveErmResponse($payload['noSep'], $bpjsResponse, $responseMetadata);
+                \Log::info('Response BPJS berhasil disimpan ke database');
+            } catch (\Exception $e) {
+                \Log::error('Gagal menyimpan response BPJS ke database: ' . $e->getMessage());
+                // Tetap lanjut proses meskipun gagal menyimpan ke database
+            }
 
             if ($response->successful()) {
                 return response()->json([
@@ -1638,6 +1727,169 @@ class BpjsController extends Controller
             $this->fixNullTextValuesInArray($dataArray, $depth + 1);
             // Convert back to object
             $data = (object)$dataArray;
+        }
+    }
+
+    /**
+     * Mendapatkan data ERM yang tersimpan untuk SEP tertentu
+     *
+     * @param  string $noSep Nomor SEP
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getErmData($noSep)
+    {
+        try {
+            // Validate input parameter
+            if (empty($noSep)) {
+                return response()->json([
+                    'message' => 'Parameter SEP tidak boleh kosong',
+                    'data' => null
+                ], 400);
+            }
+
+            \Log::info("Getting ERM data for SEP: " . $noSep);
+
+            // Use try-catch specifically for database query
+            try {
+                $ermData = RsiaErmBpjs::where('nosep', $noSep)->first();
+            } catch (\Illuminate\Database\QueryException $qe) {
+                \Log::error('Database query error for ERM data: ' . $qe->getMessage());
+                return response()->json([
+                    'message' => 'Database error saat mengambil data ERM',
+                    'error' => 'Query execution failed',
+                    'data' => null
+                ], 500);
+            }
+
+            if (!$ermData) {
+                \Log::info("No ERM data found for SEP: " . $noSep);
+                return response()->json([
+                    'message' => 'Data ERM tidak ditemukan untuk SEP: ' . $noSep,
+                    'data' => null
+                ], 404);
+            }
+
+            \Log::info("Found ERM data for SEP: " . $noSep);
+
+            // Safely prepare response data
+            $response = [
+                'data' => [
+                    'nosep' => $ermData->nosep,
+                    'created_at' => $ermData->created_at ? $ermData->created_at->toISOString() : null,
+                    'updated_at' => $ermData->updated_at ? $ermData->updated_at->toISOString() : null,
+                ]
+            ];
+
+            // Add erm_request if it exists and is valid JSON
+            try {
+                $response['data']['erm_request'] = $ermData->erm_request;
+            } catch (\Exception $e) {
+                \Log::warning('Error processing erm_request for SEP ' . $noSep . ': ' . $e->getMessage());
+                $response['data']['erm_request'] = null;
+            }
+
+            // Add erm_response if it exists and is valid JSON
+            try {
+                $response['data']['erm_response'] = $ermData->erm_response;
+            } catch (\Exception $e) {
+                \Log::warning('Error processing erm_response for SEP ' . $noSep . ': ' . $e->getMessage());
+                $response['data']['erm_response'] = null;
+            }
+
+            \Log::info("Successfully prepared ERM response for SEP: " . $noSep);
+
+            return response()->json([
+                'message' => 'Data ERM ditemukan',
+                'data' => $response['data']
+            ], 200);
+
+        } catch (\Exception $e) {
+            \Log::error('Unexpected error retrieving ERM data for SEP ' . $noSep . ': ' . $e->getMessage());
+            \Log::error('Stack trace: ' . $e->getTraceAsString());
+
+            return response()->json([
+                'message' => 'Terjadi kesalahan saat mengambil data ERM',
+                'error' => 'Internal server error',
+                'data' => null
+            ], 500);
+        }
+    }
+
+    /**
+     * Mendapatkan hanya bundle ERM asli (sebelum enkripsi) untuk debugging
+     *
+     * @param  string $noSep Nomor SEP
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getErmBundle($noSep)
+    {
+        try {
+            $ermData = RsiaErmBpjs::where('nosep', $noSep)->first();
+
+            if (!$ermData || !$ermData->erm_request) {
+                return response()->json([
+                    'message' => 'Bundle ERM tidak ditemukan untuk SEP: ' . $noSep,
+                    'bundle' => null
+                ], 404);
+            }
+
+            $requestData = $ermData->erm_request;
+            $bundle = $requestData['bundle'] ?? null;
+
+            return response()->json([
+                'message' => 'Bundle ERM ditemukan',
+                'nosep' => $noSep,
+                'metadata' => $requestData['metadata'] ?? [],
+                'timestamp' => $requestData['timestamp'] ?? null,
+                'bundle' => $bundle
+            ], 200);
+
+        } catch (\Exception $e) {
+            \Log::error('Error retrieving ERM bundle: ' . $e->getMessage());
+
+            return response()->json([
+                'message' => 'Terjadi kesalahan saat mengambil bundle ERM',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Mendapatkan hanya response BPJS untuk debugging
+     *
+     * @param  string $noSep Nomor SEP
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getBpjsResponse($noSep)
+    {
+        try {
+            $ermData = RsiaErmBpjs::where('nosep', $noSep)->first();
+
+            if (!$ermData || !$ermData->erm_response) {
+                return response()->json([
+                    'message' => 'Response BPJS tidak ditemukan untuk SEP: ' . $noSep,
+                    'response' => null
+                ], 404);
+            }
+
+            $responseData = $ermData->erm_response;
+            $response = $responseData['response'] ?? null;
+
+            return response()->json([
+                'message' => 'Response BPJS ditemukan',
+                'nosep' => $noSep,
+                'metadata' => $responseData['metadata'] ?? [],
+                'timestamp' => $responseData['timestamp'] ?? null,
+                'response' => $response
+            ], 200);
+
+        } catch (\Exception $e) {
+            \Log::error('Error retrieving BPJS response: ' . $e->getMessage());
+
+            return response()->json([
+                'message' => 'Terjadi kesalahan saat mengambil response BPJS',
+                'error' => $e->getMessage()
+            ], 500);
         }
     }
 }

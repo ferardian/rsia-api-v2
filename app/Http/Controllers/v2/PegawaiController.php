@@ -21,12 +21,68 @@ class PegawaiController extends Controller
         $page = $request->query('page', 1);
         $select = $request->query('select', '*');
 
-        $pegawai = \App\Models\Pegawai::select(explode(',', $select))
-            ->orderBy('nama', 'asc')
-            ->where('stts_aktif', 'AKTIF')
-            ->paginate(10, explode(',', $select), 'page', $page);
+        // Optimized query with LEFT JOIN to get role data in single query
+        $pegawaiQuery = \DB::table('pegawai as p')
+            ->leftJoin('rsia_user_role as ur', function($join) {
+                $join->on('ur.nip', '=', 'p.nik')
+                     ->where('ur.is_active', 1);
+            })
+            ->leftJoin('rsia_role as r', 'ur.id_role', '=', 'r.id_role')
+            ->select([
+                'p.nik as id_user', // frontend expects id_user
+                'p.nik',
+                'p.nama',
+                'p.jbtn',
+                'p.departemen',
+                'p.stts_aktif',
+                'p.photo',
+                'p.email',
+                'p.created_at',
+                'p.updated_at',
+                'r.id_role',
+                'r.nama_role'
+            ])
+            ->orderBy('p.nama', 'asc')
+            ->where('p.stts_aktif', 'AKTIF');
 
-        return new \App\Http\Resources\Pegawai\CompleteCollection($pegawai);
+        $pegawai = $pegawaiQuery->paginate(50, ['*'], 'page', $page);
+
+        // Transform data to match frontend expectations (convert to array)
+        $transformedData = [];
+        foreach ($pegawai->items() as $item) {
+            // Role data is already included via LEFT JOIN
+            $transformedData[] = [
+                'id_user' => $item->id_user,
+                'nip' => $item->nik,
+                'nama' => $item->nama,
+                'username' => $item->nik, // fallback to nik
+                'email' => $item->email,
+                'id_role' => $item->id_role ? (int) $item->id_role : null,
+                'role_name' => $item->nama_role ?: 'Belum ada role',
+                'status' => $item->stts_aktif === 'AKTIF' ? 1 : 0,
+                'jbtn' => $item->jbtn,
+                'departemen' => $item->departemen,
+                'photo' => $item->photo,
+                'created_at' => $item->created_at,
+                'updated_at' => $item->updated_at,
+            ];
+        }
+
+        // Return formatted response
+        return response()->json([
+            'success' => true,
+            'debug_message' => 'Using v2 PegawaiController with LEFT JOIN',
+            'sample_data' => $transformedData[0] ?? null,
+            'data' => $transformedData,
+            'pagination' => [
+                'current_page' => $pegawai->currentPage(),
+                'last_page' => $pegawai->lastPage(),
+                'per_page' => $pegawai->perPage(),
+                'total' => $pegawai->total(),
+                'from' => $pegawai->firstItem(),
+                'to' => $pegawai->lastItem(),
+            ]
+        ]);
     }
 
     /**

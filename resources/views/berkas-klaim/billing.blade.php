@@ -276,13 +276,36 @@
                             <td class="border-b px-1 text-right text-sm leading-none" style="padding:3px 3px; border-color: lightgray">
                                 @if (\Str::contains(\Str::lower($kategori), ['obat', 'bhp']))
                                     {{ number_format($v->sum('embalase') + $v->sum('tuslah'), 0, ',', '.') }}
+                                @elseif (\Str::contains(\Str::lower($kategori), ['lab']))
+                                    {{-- Tambahan untuk lab - total breakdown biaya dari detail_lab --}}
+                                    @php
+                                        $totalTambahanLab = 0;
+                                        if ($frv->detail_lab) {
+                                            foreach ($frv->detail_lab as $detail) {
+                                                $totalTambahanLab += ($detail->bagian_rs ?? 0) + ($detail->bhp ?? 0) + ($detail->bagian_perujuk ?? 0) + ($detail->bagian_dokter ?? 0) + ($detail->bagian_laborat ?? 0) + ($detail->kso ?? 0) + ($detail->menejemen ?? 0);
+                                            }
+                                        }
+                                    @endphp
+                                    {{ number_format($totalTambahanLab, 0, ',', '.') }}
                                 @endif
                             </td>
 
                             <td class="border-b px-1 text-right text-sm leading-none" style="padding:3px 3px; border-color: lightgray">
                                 @if (\Str::contains(\Str::lower($kategori), ['obat', 'bhp']))
                                     {{ number_format($v->sum('total'), 0, ',', '.') }}
-                                @elseif (\Str::contains(\Str::lower($kategori), ['lab', 'radiologi']))
+                                @elseif (\Str::contains(\Str::lower($kategori), ['lab']))
+                                    {{-- Total untuk lab - (biaya * quantity) + tambahan (breakdown dari detail_lab) --}}
+                                    @php
+                                        $totalTambahanLab = 0;
+                                        if ($frv->detail_lab) {
+                                            foreach ($frv->detail_lab as $detail) {
+                                                $totalTambahanLab += ($detail->bagian_rs ?? 0) + ($detail->bhp ?? 0) + ($detail->bagian_perujuk ?? 0) + ($detail->bagian_dokter ?? 0) + ($detail->bagian_laborat ?? 0) + ($detail->kso ?? 0) + ($detail->menejemen ?? 0);
+                                            }
+                                        }
+                                        $totalLab = (\App\Helpers\SafeAccess::object($frv, 'biaya', 0) * $v->count()) + $totalTambahanLab;
+                                    @endphp
+                                    {{ number_format($totalLab, 0, ',', '.') }}
+                                @elseif (\Str::contains(\Str::lower($kategori), ['radiologi']))
                                     {{ number_format($v->sum('biaya'), 0, ',', '.') }}
                                 @elseif (!\Str::contains(\Str::lower($kategori), ['operasi']))
                                     {{ number_format($v->sum('biaya_rawat'), 0, ',', '.') }}
@@ -293,7 +316,26 @@
                         {{-- Hitung total kategori --}}
                         @if (\Str::contains(\Str::lower($kategori), ['obat', 'bhp']))
                             <?php $sumCategory += $v->sum('total'); ?>
-                        @elseif (\Str::contains(\Str::lower($kategori), ['lab', 'radiologi']))
+                        @elseif (\Str::contains(\Str::lower($kategori), ['lab']))
+                            {{-- Total kategori untuk lab - menggunakan logika yang sama dengan per-item calculation --}}
+                            @php
+                                $totalKategoriLab = 0;
+                                $totalTambahanLabKategori = 0;
+
+                                // Hitung total biaya (quantity sudah diperhitungkan di sini)
+                                $totalKategoriLab += ($frv->biaya ?? 0) * $v->count();
+
+                                // Hitung total tambahan dari detail_lab
+                                if ($frv->detail_lab) {
+                                    foreach ($frv->detail_lab as $detail) {
+                                        $totalTambahanLabKategori += ($detail->bagian_rs ?? 0) + ($detail->bhp ?? 0) + ($detail->bagian_perujuk ?? 0) + ($detail->bagian_dokter ?? 0) + ($detail->bagian_laborat ?? 0) + ($detail->kso ?? 0) + ($detail->menejemen ?? 0);
+                                    }
+                                }
+
+                                $totalKategoriLab += $totalTambahanLabKategori;
+                            @endphp
+                            <?php $sumCategory += $totalKategoriLab; ?>
+                        @elseif (\Str::contains(\Str::lower($kategori), ['radiologi']))
                             <?php $sumCategory += $v->sum('biaya'); ?>
                         @elseif (!\Str::contains(\Str::lower($kategori), ['operasi']))
                             <?php $sumCategory += $v->sum('biaya_rawat'); ?>

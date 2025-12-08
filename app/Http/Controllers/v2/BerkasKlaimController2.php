@@ -891,9 +891,51 @@ class BerkasKlaimController2 extends Controller
 
     private function getTarifPeriksaLab(string $no_rawat)
     {
-        return \App\Models\PeriksaLab::with('jenisPerawatan')
+        $periksaLab = \App\Models\PeriksaLab::with('jenisPerawatan')
             ->where('no_rawat', $no_rawat)
             ->get()->groupBy('kd_jenis_prw');
+
+        // Add detail lab data to each item
+        $detailLab = \App\Models\DetailPeriksaLab::with([
+            'template' => function($q) {
+                $q->select('id_template', 'kd_jenis_prw', 'Pemeriksaan', 'satuan');
+            }
+        ])
+        ->where('no_rawat', $no_rawat)
+        ->get()
+        ->groupBy('kd_jenis_prw');
+
+        // Merge detail data into periksa lab
+        foreach ($periksaLab as $kdJenisPrw => $items) {
+            if (isset($detailLab[$kdJenisPrw])) {
+                foreach ($items as $item) {
+                    $item->detail_lab = $detailLab[$kdJenisPrw];
+                }
+            }
+        }
+
+        return $periksaLab;
+    }
+
+    /**
+     * Get detailed laboratory examination costs from detail_periksa_lab table
+     * This function follows the relation from getTarifPeriksaLab
+     *
+     * @param string $no_rawat
+     * @return \Illuminate\Support\Collection
+     */
+    private function getTarifDetailPeriksaLab(string $no_rawat)
+    {
+        return \App\Models\DetailPeriksaLab::with([
+            'template' => function($q) {
+                $q->select('id_template', 'kd_jenis_prw', 'Pemeriksaan', 'satuan');
+            }
+        ])
+        ->where('no_rawat', $no_rawat)
+        ->get()
+        ->groupBy(function($item) {
+            return $item->kd_jenis_prw;
+        });
     }
 
     private function getTarifPeriksaRadiologi(string $no_rawat)

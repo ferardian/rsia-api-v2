@@ -905,7 +905,24 @@ public function sendClaim(Request $request, string $sep)
             'send_claim' // Tipe baru untuk rekam jejak
         );
 
-        // 5. Berikan respons kembali ke frontend
+        // 5. Jika pengiriman berhasil, simpan ke inacbg_data_terkirim
+        if (isset($decodedResponse['metadata']['code']) && $decodedResponse['metadata']['code'] == 200) {
+            $user = \Illuminate\Support\Facades\Auth::user();
+            $nik = \App\Models\RsiaCoderNik::where('nik', $user->id_user)->first();
+
+            \App\Models\InacbgDataTerkirim::updateOrCreate(
+                ['no_sep' => $sep],
+                ['nik' => $nik ? $nik->no_ik : "3326105603750002"]
+            );
+
+            Log::channel(config('eklaim.log_channel'))->info("DATA TERKIRIM DISIMPAN", [
+                "no_sep" => $sep,
+                "nik" => $nik ? $nik->no_ik : "3326105603750002",
+                "status" => $decodedResponse['response']['data'][0]['kemkes_dc_status'] ?? 'unknown'
+            ]);
+        }
+
+        // 6. Berikan respons kembali ke frontend
         return response()->json($decodedResponse, 200);
 
     } catch (\Throwable $e) {

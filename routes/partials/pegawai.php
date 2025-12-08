@@ -8,8 +8,10 @@ Route::middleware(['auth:aes', 'claim:role,pegawai|dokter'])->group(function () 
   Route::get('pegawai/get', [\App\Http\Controllers\v2\PegawaiController::class, 'get'])->name('pegawai.get');
   
   // ==================== PEGAWAI
-  Orion::resource('pegawai', \App\Http\Controllers\Orion\PegawaiController::class)->only(['search', 'show']);
+  // Use v2 controller for all pegawai operations to get role data
   Route::resource('pegawai', \App\Http\Controllers\v2\PegawaiController::class)->except(['create', 'edit'])->parameters(['pegawai' => 'nik']);
+  // Keep Orion for specific search operations if needed
+  // Orion::resource('pegawai', \App\Http\Controllers\Orion\PegawaiController::class)->only(['search']);
   Route::get('pegawai-ktp/{kd_dokter}', [\App\Http\Controllers\v2\PegawaiController::class, 'getKtpNumber'])->name('pegawai.get.ktp');
 
   // ==================== UPDATE PROFILE PEGAWAI

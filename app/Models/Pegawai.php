@@ -215,11 +215,51 @@ class Pegawai extends Model
 
     /**
      * Jenjang jabatan data
-     * 
+     *
      * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
      * */
     public function jenjang_jabatan()
     {
         return $this->belongsTo(JnjJabatan::class, 'jnj_jabatan', 'kode');
+    }
+
+    /**
+     * User roles data
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\HasMany
+     */
+    public function userRoles()
+    {
+        return $this->hasMany(RsiaUserRole::class, 'nip', 'nik')->active();
+    }
+
+    /**
+     * Get primary role for user
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\HasOne
+     */
+    public function primaryRole()
+    {
+        return $this->hasOne(RsiaUserRole::class, 'nip', 'nik')
+            ->active()
+            ->with('role');
+    }
+
+    /**
+     * Get role name attribute
+     */
+    public function getRoleNameAttribute()
+    {
+        $primaryRole = $this->primaryRole;
+        return $primaryRole ? $primaryRole->role->nama_role : null;
+    }
+
+    /**
+     * Get role id attribute
+     */
+    public function getIdRoleAttribute()
+    {
+        $primaryRole = $this->primaryRole;
+        return $primaryRole ? $primaryRole->id_role : null;
     }
 }

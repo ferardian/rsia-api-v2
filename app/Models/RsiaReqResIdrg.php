@@ -43,12 +43,15 @@ class RsiaReqResIdrg extends Model
     protected $guarded = [];
 
     /**
-     * Get the bridging_sep that owns the RsiaGroupingChunks.
+     * Get the bridging_sep that owns the RsiaReqResIdrg.
+     * FIXED: Added select constraint to prevent recursive relationship with BridgingSep.rsia_klaim_idrg
      *
      * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
      */
     public function bridging_sep()
     {
-        return $this->belongsTo(BridgingSep::class, 'no_sep', 'no_sep');
+        // Prevent recursive loading by selecting only specific columns
+        return $this->belongsTo(BridgingSep::class, 'no_sep', 'no_sep')
+            ->select(['no_sep', 'no_rawat', 'nomr', 'nama_pasien', 'tglsep']);
     }
 }

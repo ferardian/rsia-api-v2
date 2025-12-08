@@ -13,6 +13,9 @@ Route::get('/fhir/ValueSet/$expand', [\App\Http\Controllers\v2\CodingCasemixCont
 Route::get('/fhir/ValueSet/\$expand', [\App\Http\Controllers\v2\CodingCasemixController::class, 'expandValueSet'])
     ->withoutMiddleware(['auth', 'auth:api', 'claim', 'user-aes']);
 
+// Route untuk riwayat laboratorium
+Route::get('/erm/riwayat-lab', [\App\Http\Controllers\v2\ErmController::class, 'getRiwayatLab']);
+
 // NEW: Coding Casemix routes
 Route::prefix('casemix')->group(function () {
     Route::get('/queue-by-patient', [\App\Http\Controllers\v2\CodingCasemixController::class, 'getQueueByPatient']);

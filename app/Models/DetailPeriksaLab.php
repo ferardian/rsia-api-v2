@@ -69,7 +69,6 @@ class DetailPeriksaLab extends Model
 
     public function template()
     {
-        return $this->belongsTo(TemplateLaboratorium::class, 'id_template', 'id_template')
-            ->select(["kd_jenis_prw", "id_template", "Pemeriksaan", "satuan", "nilai_rujukan_ld", "nilai_rujukan_la", "nilai_rujukan_pd", "nilai_rujukan_pa"]);
+        return $this->belongsTo(TemplateLaboratorium::class, 'id_template', 'id_template');
     }
 }

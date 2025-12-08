@@ -39,6 +39,17 @@ class ProcedureBilling extends Model
 
     public $timestamps = false;
 
+    // Define relationships
+    public function dokter()
+    {
+        return $this->belongsTo(Dokter::class, 'kd_dokter', 'kd_dokter');
+    }
+
+    public function petugas()
+    {
+        return $this->belongsTo(Petugas::class, 'nip', 'nip');
+    }
+
     protected $fillable = [
         'no_rawat',
         'kd_jenis_prw',
@@ -95,10 +106,12 @@ class ProcedureBilling extends Model
                 'rjd.biaya_rawat',
                 'rjd.stts_bayar',
                 'rjd.tgl_perawatan',
-                'rjd.jam_rawat'
+                'rjd.jam_rawat',
+                DB::raw('COALESCE(d.nm_dokter, "Dokter") as nama_petugas')
             ])
             ->from('rawat_jl_dr as rjd')
             ->leftJoin('jns_perawatan as jp', 'rjd.kd_jenis_prw', '=', 'jp.kd_jenis_prw')
+            ->leftJoin('dokter as d', 'rjd.kd_dokter', '=', 'd.kd_dokter')
 
             // Rawat Jalan - Dokter + Perawat
             ->union(function ($query) {
@@ -119,10 +132,12 @@ class ProcedureBilling extends Model
                     'rjdp.biaya_rawat',
                     'rjdp.stts_bayar',
                     'rjdp.tgl_perawatan',
-                    'rjdp.jam_rawat'
+                    'rjdp.jam_rawat',
+                    DB::raw('COALESCE(p.nama, "Petugas") as nama_petugas')
                 ])
                 ->from('rawat_jl_drpr as rjdp')
-                ->leftJoin('jns_perawatan as jp', 'rjdp.kd_jenis_prw', '=', 'jp.kd_jenis_prw');
+                ->leftJoin('jns_perawatan as jp', 'rjdp.kd_jenis_prw', '=', 'jp.kd_jenis_prw')
+                ->leftJoin('petugas as p', 'rjdp.nip', '=', 'p.nip');
             })
 
             // Rawat Jalan - Perawat
@@ -144,10 +159,12 @@ class ProcedureBilling extends Model
                     'rjp.biaya_rawat',
                     'rjp.stts_bayar',
                     'rjp.tgl_perawatan',
-                    'rjp.jam_rawat'
+                    'rjp.jam_rawat',
+                    DB::raw('COALESCE(p.nama, "Petugas") as nama_petugas')
                 ])
                 ->from('rawat_jl_pr as rjp')
-                ->leftJoin('jns_perawatan as jp', 'rjp.kd_jenis_prw', '=', 'jp.kd_jenis_prw');
+                ->leftJoin('jns_perawatan as jp', 'rjp.kd_jenis_prw', '=', 'jp.kd_jenis_prw')
+                ->leftJoin('petugas as p', 'rjp.nip', '=', 'p.nip');
             })
 
             // Rawat Inap - Dokter
@@ -169,10 +186,12 @@ class ProcedureBilling extends Model
                     'rid.biaya_rawat',
                     DB::raw("'Sudah' as stts_bayar"),
                     'rid.tgl_perawatan',
-                    'rid.jam_rawat'
+                    'rid.jam_rawat',
+                    DB::raw('COALESCE(d.nm_dokter, "Dokter") as nama_petugas')
                 ])
                 ->from('rawat_inap_dr as rid')
-                ->leftJoin('jns_perawatan_inap as jpi', 'rid.kd_jenis_prw', '=', 'jpi.kd_jenis_prw');
+                ->leftJoin('jns_perawatan_inap as jpi', 'rid.kd_jenis_prw', '=', 'jpi.kd_jenis_prw')
+                ->leftJoin('dokter as d', 'rid.kd_dokter', '=', 'd.kd_dokter');
             })
 
             // Rawat Inap - Dokter + Perawat
@@ -194,10 +213,12 @@ class ProcedureBilling extends Model
                     'ridpr.biaya_rawat',
                     DB::raw("'Sudah' as stts_bayar"),
                     'ridpr.tgl_perawatan',
-                    'ridpr.jam_rawat'
+                    'ridpr.jam_rawat',
+                    DB::raw('COALESCE(p.nama, "Petugas") as nama_petugas')
                 ])
                 ->from('rawat_inap_drpr as ridpr')
-                ->leftJoin('jns_perawatan_inap as jpi', 'ridpr.kd_jenis_prw', '=', 'jpi.kd_jenis_prw');
+                ->leftJoin('jns_perawatan_inap as jpi', 'ridpr.kd_jenis_prw', '=', 'jpi.kd_jenis_prw')
+                ->leftJoin('petugas as p', 'ridpr.nip', '=', 'p.nip');
             })
 
             // Rawat Inap - Perawat
@@ -219,10 +240,12 @@ class ProcedureBilling extends Model
                     'rip.biaya_rawat',
                     DB::raw("'Sudah' as stts_bayar"),
                     'rip.tgl_perawatan',
-                    'rip.jam_rawat'
+                    'rip.jam_rawat',
+                    DB::raw('COALESCE(p.nama, "Petugas") as nama_petugas')
                 ])
                 ->from('rawat_inap_pr as rip')
-                ->leftJoin('jns_perawatan_inap as jpi', 'rip.kd_jenis_prw', '=', 'jpi.kd_jenis_prw');
+                ->leftJoin('jns_perawatan_inap as jpi', 'rip.kd_jenis_prw', '=', 'jpi.kd_jenis_prw')
+                ->leftJoin('petugas as p', 'rip.nip', '=', 'p.nip');
             });
         }, 'procedure_billing');
 
@@ -256,11 +279,13 @@ class ProcedureBilling extends Model
     public function getNamaPetugasAttribute()
     {
         if ($this->jenis_petugas === 'Dokter' && $this->kd_dokter) {
-            // Could implement doctor lookup if needed
-            return 'Dokter';
+            // Get doctor name from database
+            $dokter = DB::table('dokter')->where('kd_dokter', $this->kd_dokter)->first();
+            return $dokter ? $dokter->nm_dokter : 'Dokter';
         } elseif ($this->nip) {
-            // Could implement petugas lookup if needed
-            return 'Petugas';
+            // Get petugas name from database
+            $petugas = DB::table('petugas')->where('nip', $this->nip)->first();
+            return $petugas ? $petugas->nama : 'Petugas';
         }
 
         return $this->jenis_petugas;
