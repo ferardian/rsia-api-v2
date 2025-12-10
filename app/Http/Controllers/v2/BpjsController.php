@@ -539,8 +539,8 @@ class BpjsController extends Controller
 
         // 6. Kirim request ke BPJS
         // Use correct BPJS e-claim API endpoint with full path
-        // $serviceUrl = $this->baseUrl . '/erekammedis_dev/eclaim/rekammedis/insert';
-        $serviceUrl = $this->baseUrl . '/medicalrecord/eclaim/rekammedis/insert';
+        $serviceUrl = $this->baseUrl . '/erekammedis_dev/eclaim/rekammedis/insert';
+        // $serviceUrl = $this->baseUrl . '/medicalrecord/eclaim/rekammedis/insert';
 
         // Debug: Log service URL attempts
         \Log::info('BPJS Service URL: ' . $serviceUrl);
