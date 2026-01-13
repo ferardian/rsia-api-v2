@@ -116,7 +116,7 @@
                         <td>{{ $resume->kd_diagnosa_sekunder ?? null }}</td>
                     </tr>
 
-                    @for ($i = 2; $i <= 7; $i++)
+                    @for ($i = 2; $i <= 11; $i++)
                         @php
                             $diagnosa = 'diagnosa_sekunder' . $i;
                             $kd_diagnosa = 'kd_diagnosa_sekunder' . $i;

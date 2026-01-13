@@ -100,7 +100,7 @@ class Pasien extends Authenticatable
 
     protected $primaryKey = 'no_rkm_medis';
 
-    protected $hidden = ['no_peserta'];
+    protected $hidden = [];
 
     protected $guarded = [];
 

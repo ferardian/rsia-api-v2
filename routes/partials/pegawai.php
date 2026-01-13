@@ -17,6 +17,9 @@ Route::middleware(['auth:aes', 'claim:role,pegawai|dokter'])->group(function () 
   // ==================== UPDATE PROFILE PEGAWAI
   Orion::belongsToManyResource('pegawai', 'cuti', \App\Http\Controllers\Orion\CutiPegawaiController::class)->only(['search'])->parameters(['pegawai' => 'nik', 'cuti' => 'id_cuti']);
   Route::get('pegawai/{nik}/cuti/counter', [\App\Http\Controllers\v2\CutiPegawaiController::class, 'counterCuti'])->name('pegawai.cuti.counter');
+  Route::get('pegawai/{nik}/cuti/approval', [\App\Http\Controllers\v2\CutiPegawaiController::class, 'getApprovalList'])->name('pegawai.cuti.approval');
+  Route::put('pegawai/{nik}/cuti/{id}/approve', [\App\Http\Controllers\v2\CutiPegawaiController::class, 'approveLeave'])->name('pegawai.cuti.approve');
+  Route::put('pegawai/{nik}/cuti/{id}/reject', [\App\Http\Controllers\v2\CutiPegawaiController::class, 'rejectLeave'])->name('pegawai.cuti.reject');
   Route::apiResource('pegawai.cuti', \App\Http\Controllers\v2\CutiPegawaiController::class)->except(['create', 'edit'])->parameters(['pegawai' => 'nik', 'cuti' => 'id_cuti']);
 
   // ==================== UPDATE PROFILE PEGAWAI

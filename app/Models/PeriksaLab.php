@@ -157,6 +157,6 @@ class PeriksaLab extends Model
             DetailPeriksaLab::class,
             ['no_rawat', 'kd_jenis_prw', 'tgl_periksa', 'jam'],
             ['no_rawat', 'kd_jenis_prw', 'tgl_periksa', 'jam']
-        )->select(['no_rawat', 'kd_jenis_prw', 'tgl_periksa', 'jam', 'id_template', 'nilai', 'nilai_rujukan', 'keterangan']);
+        )->select(['no_rawat', 'kd_jenis_prw', 'tgl_periksa', 'jam', 'id_template', 'nilai', 'nilai_rujukan', 'keterangan', 'biaya_item']);
     }
 }

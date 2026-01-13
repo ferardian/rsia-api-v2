@@ -69,6 +69,7 @@ class PermintaanPerbaikanInventaris extends Model
 	 * @var array
 	 */
 	protected $fillable = [
+		'no_permintaan',
 		'no_inventaris',
 		'nik',
 		'tanggal',

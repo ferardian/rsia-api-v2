@@ -53,8 +53,7 @@ class RsiaUndanganController extends Controller
      */
     public function exposedScopes(): array
     {
-        // return ['scopeSearchByRelatedModel'];
-        return [];
+        return ['filterByPenerima'];
     }
 
     /**
@@ -74,7 +73,7 @@ class RsiaUndanganController extends Controller
      */
     public function filterableBy(): array
     {
-        return ['tipe', 'penerima', 'tanggal'];
+        return ['tipe', 'tanggal'];
     }
 
     /**

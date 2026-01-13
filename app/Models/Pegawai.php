@@ -262,4 +262,14 @@ class Pegawai extends Model
         $primaryRole = $this->primaryRole;
         return $primaryRole ? $primaryRole->id_role : null;
     }
+
+    /**
+     * Kualifikasi staf klinis relationship
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\HasOne
+     */
+    public function kualifikasiStaf()
+    {
+        return $this->hasOne(RsiaKualifikasiStafKlinis::class, 'nik', 'nik');
+    }
 }

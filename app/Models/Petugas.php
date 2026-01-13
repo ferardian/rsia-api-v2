@@ -68,6 +68,11 @@ class Petugas extends Model
         return $this->belongsTo(Pegawai::class, 'nip', 'nik');
     }
 
+    public function jabatan()
+    {
+        return $this->belongsTo(Jabatan::class, 'kd_jbtn', 'kd_jbtn');
+    }
+
     /**
      * Get the sidikjari associated with the Petugas
      *

@@ -10,6 +10,8 @@ class JadwalPegawai extends Model
     use HasFactory;
 
     protected $table = 'jadwal_pegawai';
+    protected $guarded = [];
+    public $timestamps = false; // Table doesn't have created_at/updated_at
 
     public function pegawai()
     {

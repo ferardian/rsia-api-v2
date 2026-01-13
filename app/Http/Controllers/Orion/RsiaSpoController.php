@@ -36,8 +36,30 @@ class RsiaSpoController extends \Orion\Http\Controllers\Controller
      */
     protected function buildIndexFetchQuery(Request $request, array $requestedRelations): \Illuminate\Database\Eloquent\Builder
     {
-        return parent::buildIndexFetchQuery($request, $requestedRelations)
-            ->orderBy('tgl_terbit', 'desc');
+        $query = parent::buildIndexFetchQuery($request, $requestedRelations);
+
+        if ($request->has('filter.unit_id')) {
+            $query->where('unit_id', $request->input('filter.unit_id'));
+        }
+
+        if ($request->has('filter.status')) {
+            $query->where('status', $request->input('filter.status'));
+        }
+
+        if ($request->has('filter.jenis')) {
+            $query->where('jenis', $request->input('filter.jenis'));
+        }
+
+        if ($request->has('search')) {
+            $keyword = $request->input('search');
+            $query->where(function ($q) use ($keyword) {
+                $q->where('judul', 'like', "%{$keyword}%")
+                  ->orWhere('nomor', 'like', "%{$keyword}%")
+                  ->orWhere('jenis', 'like', "%{$keyword}%");
+            });
+        }
+
+        return $query->orderBy('tgl_terbit', 'desc');
     }
 
     /**
@@ -51,42 +73,20 @@ class RsiaSpoController extends \Orion\Http\Controllers\Controller
     {
         $dir = \App\Models\Pegawai::where('jnj_jabatan', 'RS1')->pluck('nik');
         $spoData = [
-            'status'       => $request->status ?? "pengajuan",
+            'status'       => "pengajuan", // Force status pengajuan saat create
             'judul'        => $request->judul,
             'direktur_id'  => $dir,
             'tgl_terbit'   => $request->tgl_terbit,
             'unit_id'      => $request->unit_id,
+            'nomor'        => null, // Nomor generated saat approval
             'jenis'        => $request->jenis,
-            'pengertian'   => $request->pengertian,
-            'tujuan'       => $request->tujuan,
-            'kebijakan'    => $request->kebijakan,
-            'prosedur'     => $request->prosedur,
+            'pengertian'   => \Stevebauman\Purify\Facades\Purify::clean($request->pengertian),
+            'tujuan'       => \Stevebauman\Purify\Facades\Purify::clean($request->tujuan),
+            'kebijakan'    => \Stevebauman\Purify\Facades\Purify::clean($request->kebijakan),
+            'prosedur'     => \Stevebauman\Purify\Facades\Purify::clean($request->prosedur),
         ];
 
-        // TODO : sesuaikan status dengan verifikasi sesuai departemen
-        if ($spoData['status'] == 'disetujui') {
-            $lastNomor = $this->model::whereYear('tgl_terbit', $request->tgl_terbit)
-                ->where('jenis', $request->jenis)
-                ->where('no_surat', "<>", null)
-                ->orderBy('created_at', 'desc')
-                ->first();
-
-            if ($lastNomor) {
-                $lastNomor    = explode('/', $lastNomor->nomor);
-                $lastNomor[0] = str_pad(($lastNomor[0] + 1), 3, '0', STR_PAD_LEFT);
-                $lastNomor[3] = \Carbon\Carbon::parse($request->tgl_terbit)->format('dmy');
-                $lastNomor = implode('/', $lastNomor);
-            } else {
-                $lastNomor = implode('/', [
-                    '001',
-                    $this->jenisMapping[\Str::lower($request->jenis)] ?? 'X',
-                    'SPO-RSIA',
-                    \Carbon\Carbon::parse($request->tgl_terbit)->format('dmy'),
-                ]);
-            }
-
-            $spoData['nomor'] = $lastNomor;
-        }
+        // Logic generate nomor dipindah ke performUpdate (saat approval)
 
         $this->performFill($request, $e, $spoData);
         $e->save();
@@ -131,7 +131,7 @@ class RsiaSpoController extends \Orion\Http\Controllers\Controller
                 $lastNomor = implode('/', [
                     '001',
                     $this->jenisMapping[\Str::lower($request->jenis)] ?? 'X',
-                    'SPO-RSIA',
+                    'SPO-RSUA',
                     \Carbon\Carbon::parse($request->tgl_terbit)->format('dmy'),
                 ]);
             }

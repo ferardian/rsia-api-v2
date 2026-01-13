@@ -79,6 +79,9 @@ class MenuController extends Controller
     /**
      * Get user menus based on their role
      */
+    /**
+     * Get user menus based on their role
+     */
     public function getUserMenus(Request $request)
     {
         try {
@@ -91,27 +94,83 @@ class MenuController extends Controller
                 ], 401);
             }
 
-            // Get user's active role
-            $userRole = DB::table('rsia_user_role')
-                ->join('rsia_role', 'rsia_user_role.id_role', '=', 'rsia_role.id_role')
-                ->where('rsia_user_role.id_user', $user->id_user)
-                ->where('rsia_user_role.is_active', true)
-                ->where('rsia_role.is_active', true)
-                ->first();
+            $roleId = null;
+            $roleName = null;
 
-            if (!$userRole) {
+            // 1. Check if X-Role-ID header is present (Client-side selection)
+            $headerRoleId = $request->header('X-Role-ID');
+            if ($headerRoleId) {
+                // Verify user has this role and it's assigned
+                $assignment = DB::table('rsia_user_role')
+                    ->join('rsia_role', 'rsia_user_role.id_role', '=', 'rsia_role.id_role')
+                    ->where('rsia_user_role.id_user', $user->id_user)
+                    ->where('rsia_user_role.id_role', $headerRoleId)
+                    ->where('rsia_role.is_active', 1)
+                    ->select('rsia_role.id_role', 'rsia_role.nama_role')
+                    ->first();
+
+                if ($assignment) {
+                    $roleId = $assignment->id_role;
+                    $roleName = $assignment->nama_role;
+                }
+            }
+
+            // 2. If no valid header role, fallback to first active role in DB
+            if (!$roleId) {
+                $activeRole = DB::table('rsia_user_role')
+                    ->join('rsia_role', 'rsia_user_role.id_role', '=', 'rsia_role.id_role')
+                    ->where('rsia_user_role.id_user', $user->id_user)
+                    ->where('rsia_user_role.is_active', 1)
+                    ->where('rsia_role.is_active', 1)
+                    ->select('rsia_role.id_role', 'rsia_role.nama_role')
+                    ->first();
+
+                if ($activeRole) {
+                    $roleId = $activeRole->id_role;
+                    $roleName = $activeRole->nama_role;
+                }
+            }
+
+            if (!$roleId) {
                 return response()->json([
                     'success' => false,
-                    'error' => 'No active role found'
+                    'error' => 'No active role found for user'
                 ], 403);
             }
 
-            // Get menus with permissions for this user's role
-            $menus = DB::table('v_user_menu_permissions')
-                ->where('id_user', $user->id_user)
-                ->orderBy('parent_id')
-                ->orderBy('urutan')
+            // 3. Get menus directly from rsia_role_menu -> rsia_menu
+            // This ensures we get menus SPECIFIC to the selected role id
+            \Illuminate\Support\Facades\Log::info('getUserMenus Request', [
+                'user_id' => $user->id_user,
+                'determined_role_id' => $roleId
+            ]);
+
+            $menus = DB::table('rsia_role_menu as rm')
+                ->join('rsia_menu as m', 'rm.id_menu', '=', 'm.id_menu')
+                ->where('rm.id_role', $roleId)
+                ->where('m.is_active', 1)
+                ->where('rm.can_view', 1)
+                ->select(
+                    'm.id_menu',
+                    'm.parent_id',
+                    'm.nama_menu',
+                    'm.icon',
+                    'm.route',
+                    'm.urutan',
+                    'rm.can_view',
+                    'rm.can_create',
+                    'rm.can_update',
+                    'rm.can_delete',
+                    'rm.can_export',
+                    'rm.can_import'
+                )
+                ->orderBy('m.urutan', 'asc')
                 ->get();
+            
+            \Illuminate\Support\Facades\Log::info('getUserMenus Result', [
+                'count' => $menus->count(),
+                'ids' => $menus->pluck('id_menu')
+            ]);
 
             // Build menu tree structure
             $menuTree = $this->buildMenuTree($menus);
@@ -120,8 +179,8 @@ class MenuController extends Controller
                 'success' => true,
                 'data' => $menuTree,
                 'user_role' => [
-                    'id_role' => $userRole->id_role,
-                    'nama_role' => $userRole->nama_role
+                    'id_role' => $roleId,
+                    'nama_role' => $roleName
                 ]
             ]);
 
@@ -419,5 +478,334 @@ class MenuController extends Controller
         foreach ($siblings as $sibling) {
             $sibling->increment('urutan');
         }
+    }
+
+    /**
+     * Get role permissions for all menus
+     */
+    public function getRolePermissions($roleId)
+    {
+        try {
+            $role = RsiaRole::findOrFail($roleId);
+
+            // Get all menus
+            $menus = RsiaMenu::orderBy('parent_id')
+                          ->orderBy('urutan')
+                          ->get();
+
+            // Get existing permissions for this role
+            $existingPermissions = RsiaRoleMenu::where('id_role', $roleId)
+                ->get()
+                ->keyBy('id_menu');
+
+            // Build menu tree with permissions
+            $menuTree = $this->buildMenuTreeWithPermissions($menus, $existingPermissions);
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'role' => $role,
+                    'menus' => $menuTree,
+                    'permissions' => $existingPermissions
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Update role permissions for menus
+     */
+    public function updateRolePermissions(Request $request, $roleId)
+    {
+        try {
+            $request->validate([
+                'permissions' => 'required|array',
+                'permissions.*.id_menu' => 'required|integer|exists:rsia_menu,id_menu',
+                'permissions.*.can_view' => 'boolean',
+                'permissions.*.can_create' => 'boolean',
+                'permissions.*.can_update' => 'boolean',
+                'permissions.*.can_delete' => 'boolean',
+                'permissions.*.can_export' => 'boolean',
+                'permissions.*.can_import' => 'boolean'
+            ]);
+
+            $role = RsiaRole::findOrFail($roleId);
+
+            DB::beginTransaction();
+
+            // Delete existing permissions
+            RsiaRoleMenu::where('id_role', $roleId)->delete();
+
+            // Insert new permissions
+            foreach ($request->permissions as $permission) {
+                // Only insert if at least one permission is granted
+                if ($permission['can_view'] || $permission['can_create'] ||
+                    $permission['can_update'] || $permission['can_delete'] ||
+                    $permission['can_export'] || $permission['can_import']) {
+
+                    RsiaRoleMenu::create([
+                        'id_role' => $roleId,
+                        'id_menu' => $permission['id_menu'],
+                        'can_view' => $permission['can_view'] ?? false,
+                        'can_create' => $permission['can_create'] ?? false,
+                        'can_update' => $permission['can_update'] ?? false,
+                        'can_delete' => $permission['can_delete'] ?? false,
+                        'can_export' => $permission['can_export'] ?? false,
+                        'can_import' => $permission['can_import'] ?? false,
+                        'created_by' => Auth::id()
+                    ]);
+                }
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Role permissions updated successfully'
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return response()->json([
+                'success' => false,
+                'error' => $e->getMessage()
+            ], 422);
+        }
+    }
+
+    /**
+     * Get all roles with their menu permissions summary
+     */
+    public function getRoleMenuSummary()
+    {
+        try {
+            $roles = RsiaRole::withCount(['roleMenus' => function($query) {
+                $query->where('can_view', 1);
+            }])->get();
+
+            $roles->each(function($role) {
+                $role->permission_count = RsiaRoleMenu::where('id_role', $role->id_role)
+                    ->where(function($query) {
+                        $query->where('can_create', 1)
+                              ->orWhere('can_update', 1)
+                              ->orWhere('can_delete', 1)
+                              ->orWhere('can_export', 1)
+                              ->orWhere('can_import', 1);
+                    })->count();
+            });
+
+            return response()->json([
+                'success' => true,
+                'data' => $roles
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get menu permissions for specific role (detailed)
+     */
+    public function getRoleMenuDetails($roleId)
+    {
+        try {
+            $role = RsiaRole::findOrFail($roleId);
+
+            $permissions = DB::table('rsia_role_menu as rm')
+                ->join('rsia_menu as m', 'rm.id_menu', '=', 'm.id_menu')
+                ->where('rm.id_role', $roleId)
+                ->select(
+                    'rm.*',
+                    'm.nama_menu',
+                    'm.route',
+                    'm.parent_id',
+                    'm.urutan'
+                )
+                ->orderBy('m.parent_id')
+                ->orderBy('m.urutan')
+                ->get();
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'role' => $role,
+                    'permissions' => $permissions
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Copy permissions from one role to another
+     */
+    public function copyRolePermissions(Request $request)
+    {
+        try {
+            $request->validate([
+                'source_role_id' => 'required|integer|exists:rsia_role,id_role',
+                'target_role_id' => 'required|integer|exists:rsia_role,id_role|different:source_role_id'
+            ]);
+
+            $sourceRoleId = $request->source_role_id;
+            $targetRoleId = $request->target_role_id;
+
+            DB::beginTransaction();
+
+            // Delete existing permissions for target role
+            RsiaRoleMenu::where('id_role', $targetRoleId)->delete();
+
+            // Get source permissions
+            $sourcePermissions = RsiaRoleMenu::where('id_role', $sourceRoleId)->get();
+
+            // Copy to target role
+            foreach ($sourcePermissions as $permission) {
+                RsiaRoleMenu::create([
+                    'id_role' => $targetRoleId,
+                    'id_menu' => $permission->id_menu,
+                    'can_view' => $permission->can_view,
+                    'can_create' => $permission->can_create,
+                    'can_update' => $permission->can_update,
+                    'can_delete' => $permission->can_delete,
+                    'can_export' => $permission->can_export,
+                    'can_import' => $permission->can_import,
+                    'created_by' => Auth::id()
+                ]);
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Permissions copied successfully',
+                'copied_count' => $sourcePermissions->count()
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return response()->json([
+                'success' => false,
+                'error' => $e->getMessage()
+            ], 422);
+        }
+    }
+
+    /**
+     * Check if user has access to specific menu and permission
+     */
+    public function checkUserAccess(Request $request)
+    {
+        try {
+            $request->validate([
+                'menu_id' => 'required|integer|exists:rsia_menu,id_menu',
+                'permission' => 'required|in:can_view,can_create,can_update,can_delete,can_export,can_import',
+                'user_id' => 'nullable|string' // optional, defaults to authenticated user
+            ]);
+
+            $userId = $request->user_id ?? Auth::id();
+            $menuId = $request->menu_id;
+            $permission = $request->permission;
+
+            // Get user's roles
+            $userRoles = DB::table('rsia_user_role')
+                ->where('id_user', $userId)
+                ->where('is_active', 1)
+                ->pluck('id_role');
+
+            if ($userRoles->isEmpty()) {
+                return response()->json([
+                    'success' => true,
+                    'has_access' => false,
+                    'message' => 'No active roles found'
+                ]);
+            }
+
+            // Check permission across all user roles
+            $hasAccess = DB::table('rsia_role_menu')
+                ->whereIn('id_role', $userRoles)
+                ->where('id_menu', $menuId)
+                ->where($permission, 1)
+                ->exists();
+
+            return response()->json([
+                'success' => true,
+                'has_access' => $hasAccess
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Build menu tree with permissions
+     */
+    private function buildMenuTreeWithPermissions($menus, $permissions)
+    {
+        $tree = [];
+        $indexed = [];
+
+        // Index menus by id and add permissions
+        foreach ($menus as $menu) {
+            $menuArray = $menu->toArray();
+            $menuPermission = $permissions->get($menu->id_menu);
+
+            if ($menuPermission) {
+                $menuArray['permissions'] = [
+                    'can_view' => $menuPermission->can_view,
+                    'can_create' => $menuPermission->can_create,
+                    'can_update' => $menuPermission->can_update,
+                    'can_delete' => $menuPermission->can_delete,
+                    'can_export' => $menuPermission->can_export,
+                    'can_import' => $menuPermission->can_import
+                ];
+            } else {
+                $menuArray['permissions'] = [
+                    'can_view' => false,
+                    'can_create' => false,
+                    'can_update' => false,
+                    'can_delete' => false,
+                    'can_export' => false,
+                    'can_import' => false
+                ];
+            }
+
+            $menuArray['children'] = [];
+            $indexed[$menu->id_menu] = $menuArray;
+        }
+
+        // Build tree structure
+        foreach ($indexed as $id => &$menu) {
+            if ($menu['parent_id'] && isset($indexed[$menu['parent_id']])) {
+                $indexed[$menu['parent_id']]['children'][] = &$menu;
+            } else {
+                $tree[] = &$menu;
+            }
+        }
+
+        // Remove empty children arrays
+        $this->removeEmptyChildren($tree);
+
+        return $tree;
     }
 }

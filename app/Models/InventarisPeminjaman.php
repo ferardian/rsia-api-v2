@@ -1,107 +1,41 @@
 <?php
 
-/**
- * Created by Reliese Model.
- */
-
 namespace App\Models;
 
-use Awobaz\Compoships\Compoships;
-use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
-use Thiagoprz\CompositeKey\HasCompositeKey;
+use Illuminate\Database\Eloquent\Builder;
 
-/**
- * Class InventarisPeminjaman
- * 
- * @property string $peminjam
- * @property string $tlp
- * @property string $no_inventaris
- * @property Carbon $tgl_pinjam
- * @property Carbon|null $tgl_kembali
- * @property string $nip
- * @property string|null $status_pinjam
- * 
- * @property Inventaris $inventaris
- * @property Petugas $petugas
- *
- * @package App\Models
- */
 class InventarisPeminjaman extends Model
 {
-	use HasCompositeKey, Compoships;
+    protected $table = 'inventaris_peminjaman';
+    // Composite keys are not natively supported by Eloquent for save/update without workarounds.
+    // We disable auto increment and manage keys manually.
+    public $incrementing = false;
+    public $timestamps = false;
+    protected $guarded = [];
 
-	/**
-	 * Primary key
-	 *
-	 * @var string
-	 */
-	protected $primaryKey = [
-		'peminjam',
-		'no_inventaris',
-		'tgl_pinjam',
-		'nip'
-	];
+    // Since Laravel doesn't support composite primary keys well, we might need to override
+    // setKeysForSaveQuery if we intend to use save() on existing models effectively.
+    // For now, simpler querying and inserting via query builder might be preferred for complex operations.
+    
+    protected function setKeysForSaveQuery($query)
+    {
+        $query
+            ->where('peminjam', '=', $this->getAttribute('peminjam'))
+            ->where('no_inventaris', '=', $this->getAttribute('no_inventaris'))
+            ->where('tgl_pinjam', '=', $this->getAttribute('tgl_pinjam'))
+            ->where('nip', '=', $this->getAttribute('nip'));
 
-	/**
-	 * Table name
-	 *
-	 * @var string
-	 */
-	protected $table = 'inventaris_peminjaman';
+        return $query;
+    }
 
-	/**
-	 * Primary key
-	 *
-	 * @var string
-	 */
-	public $incrementing = false;
+    public function inventaris()
+    {
+        return $this->belongsTo(Inventaris::class, 'no_inventaris', 'no_inventaris');
+    }
 
-	/**
-	 * Timestamps
-	 *
-	 * @var bool
-	 */
-	public $timestamps = false;
-
-	/**
-	 * Fillable fields
-	 *
-	 * @var array
-	 */
-	protected $casts = [
-		'tgl_pinjam' => 'datetime',
-		'tgl_kembali' => 'datetime'
-	];
-
-	/**
-	 * Fillable fields
-	 *
-	 * @var array
-	 */
-	protected $fillable = [
-		'tlp',
-		'tgl_kembali',
-		'status_pinjam'
-	];
-
-	/**
-	 * Inventaris relation
-	 *
-	 * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
-	 */
-	public function inventaris()
-	{
-		return $this->belongsTo(Inventaris::class, 'no_inventaris');
-	}
-
-	/**
-	 * Petugas relation
-	 *
-	 * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
-	 */
-	public function petugas()
-	{
-		return $this->belongsTo(Petugas::class, 'nip');
-	}
+    public function pegawai()
+    {
+        return $this->belongsTo(Pegawai::class, 'nip', 'nik'); // Assuming Pegawai uses 'nik' as primary key based on usual RSIA schema, though here column is 'nip'. Check if it maps to 'nik'.
+    }
 }

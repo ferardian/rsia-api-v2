@@ -18,9 +18,12 @@ class RoleController extends Controller
     public function index(Request $request)
     {
         try {
-            $query = RsiaRole::withCount(['userRoles' => function($query) {
-                $query->where('is_active', true);
-            }]);
+            $query = RsiaRole::withCount([
+                'userRoles' => function($query) {
+                    $query->where('is_active', true);
+                },
+                'roleMenus as menu_count'
+            ]);
 
             // Filter by active status
             if ($request->has('active')) {
@@ -332,6 +335,89 @@ class RoleController extends Controller
                 'success' => false,
                 'error' => $e->getMessage()
             ], 422);
+        }
+    }
+
+    /**
+     * Assign role to user
+     */
+    public function assignRoleToUser(Request $request)
+    {
+        try {
+            $request->validate([
+                'nip' => 'required|string|exists:pegawai,nik',
+                'access_level_id' => 'required|integer|exists:rsia_role,id_role',
+                'user_id' => 'required|integer'
+            ]);
+
+            // Check if assignment already exists
+            $existingAssignment = RsiaUserRole::where('nip', $request->nip)
+                ->where('id_role', $request->access_level_id)
+                ->first();
+
+            if ($existingAssignment) {
+                // Reactivate if exists but inactive
+                if (!$existingAssignment->is_active) {
+                    $existingAssignment->update([
+                        'is_active' => true,
+                        'updated_by' => Auth::id()
+                    ]);
+                } else {
+                    return response()->json([
+                        'success' => false,
+                        'error' => 'User already has this role'
+                    ], 422);
+                }
+            } else {
+                // Create new assignment
+                RsiaUserRole::create([
+                    'nip' => $request->nip,
+                    'id_role' => $request->access_level_id,
+                    'id_user' => $request->user_id,
+                    'is_active' => true,
+                    'created_by' => Auth::id()
+                ]);
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Role berhasil ditugaskan ke user'
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'error' => $e->getMessage()
+            ], 422);
+        }
+    }
+
+    /**
+     * Remove role from user
+     */
+    public function removeRoleFromUser($nip, $roleId)
+    {
+        try {
+            $userRole = RsiaUserRole::where('nip', $nip)
+                ->where('id_role', $roleId)
+                ->firstOrFail();
+
+            // Soft delete by deactivating
+            $userRole->update([
+                'is_active' => false,
+                'updated_by' => Auth::id()
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Role berhasil dihapus dari user'
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Gagal menghapus role dari user: ' . $e->getMessage()
+            ], 404);
         }
     }
 }

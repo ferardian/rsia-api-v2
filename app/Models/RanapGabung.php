@@ -33,4 +33,13 @@ class RanapGabung extends Model
     public $timestamps = false;
 
     public $incrementing = false;
+    public function regPeriksa()
+    {
+        return $this->belongsTo(RegPeriksa::class, 'no_rawat', 'no_rawat');
+    }
+
+    public function regPeriksa2()
+    {
+        return $this->belongsTo(RegPeriksa::class, 'no_rawat2', 'no_rawat');
+    }
 }

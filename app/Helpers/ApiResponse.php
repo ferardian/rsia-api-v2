@@ -17,12 +17,18 @@ class ApiResponse
     return response()->json($body, 200);
   }
 
-  public static function successWithData($data, $message = null)
+  public static function successWithData($data, $message = null, $additionalMeta = [])
   {
-    return response()->json([
+    $response = [
       'message' => $message,
       'data'    => $data,
-    ], 200);
+    ];
+
+    if (!empty($additionalMeta) && is_array($additionalMeta)) {
+      $response = array_merge($response, $additionalMeta);
+    }
+
+    return response()->json($response, 200);
   }
 
   public static function error($message, $error, $trace = null, $status = 400)

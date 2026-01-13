@@ -193,4 +193,13 @@ class KamarInap extends Model
     {
         return $this->hasOneThrough(Dokter::class, RegPeriksa::class, 'no_rawat', 'kd_dokter', 'no_rawat', 'kd_dokter');
     }
+    /**
+     * relation to ranap gabung (bayi)
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\HasMany
+     */
+    public function ranapGabung()
+    {
+        return $this->hasMany(RanapGabung::class, 'no_rawat', 'no_rawat');
+    }
 }

@@ -73,4 +73,67 @@ class JadwalDokterController extends \Orion\Http\Controllers\Controller
     {
         return ['kd_dokter', 'hari_kerja', 'jam_mulai', 'jam_selesai', 'kd_poli', 'kuota'];
     }
+
+    /**
+     * Custom update method to handle composite key
+     */
+    public function customUpdate(\Illuminate\Http\Request $request, $resourceKey)
+    {
+        // Decode URL-encoded key
+        $resourceKey = urldecode($resourceKey);
+        
+        // Parse composite key: kd_dokter,hari_kerja,jam_mulai
+        $keys = explode(',', $resourceKey);
+        if (count($keys) !== 3) {
+            return response()->json(['message' => 'Invalid composite key format'], 400);
+        }
+
+        [$kd_dokter, $hari_kerja, $jam_mulai] = $keys;
+
+        // Find the record
+        $jadwal = $this->model::where('kd_dokter', $kd_dokter)
+            ->where('hari_kerja', $hari_kerja)
+            ->where('jam_mulai', $jam_mulai)
+            ->first();
+
+        if (!$jadwal) {
+            return response()->json(['message' => 'Schedule not found'], 404);
+        }
+
+        // Update the record
+        $jadwal->update($request->all());
+
+        return response()->json([
+            'data' => new $this->resource($jadwal)
+        ]);
+    }
+
+    /**
+     * Custom destroy method to handle composite key
+     */
+    public function customDestroy($resourceKey)
+    {
+        // Decode URL-encoded key
+        $resourceKey = urldecode($resourceKey);
+        
+        // Parse composite key: kd_dokter,hari_kerja,jam_mulai
+        $keys = explode(',', $resourceKey);
+        if (count($keys) !== 3) {
+            return response()->json(['message' => 'Invalid composite key format'], 400);
+        }
+
+        [$kd_dokter, $hari_kerja, $jam_mulai] = $keys;
+
+        // Find and delete the record
+        $deleted = $this->model::where('kd_dokter', $kd_dokter)
+            ->where('hari_kerja', $hari_kerja)
+            ->where('jam_mulai', $jam_mulai)
+            ->delete();
+
+        if (!$deleted) {
+            return response()->json(['message' => 'Schedule not found'], 404);
+        }
+
+        return response()->json(['message' => 'Schedule deleted successfully']);
+    }
 }

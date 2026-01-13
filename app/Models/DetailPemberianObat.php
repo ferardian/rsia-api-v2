@@ -76,7 +76,7 @@ class DetailPemberianObat extends Model
 
     public function obat()
     {
-        return $this->belongsTo(DataBarang::class, 'kode_brng', 'kode_brng')->select('kode_brng', 'nama_brng', 'kode_sat');
+        return $this->belongsTo(DataBarang::class, 'kode_brng', 'kode_brng')->select('kode_brng', 'nama_brng', 'kode_sat', 'kdjns');
     }
 
     public function aturanPakai()

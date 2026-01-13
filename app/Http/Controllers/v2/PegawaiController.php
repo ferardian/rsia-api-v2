@@ -5,9 +5,13 @@ namespace App\Http\Controllers\v2;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use App\Models\Pegawai;
+
+use App\Traits\LogsToTracker;
 
 class PegawaiController extends Controller
 {
+    use LogsToTracker;
     /**
      * Menampilkan daftar pegawai.
      * 
@@ -28,43 +32,69 @@ class PegawaiController extends Controller
                      ->where('ur.is_active', 1);
             })
             ->leftJoin('rsia_role as r', 'ur.id_role', '=', 'r.id_role')
+            ->leftJoin('petugas as pt', 'pt.nip', '=', 'p.nik')
+            ->leftJoin('departemen as d', 'd.dep_id', '=', 'p.departemen')
             ->select([
-                'p.nik as id_user', // frontend expects id_user
+                'p.nik as id_user',
                 'p.nik',
                 'p.nama',
+                'p.jk',
+                'p.tmp_lahir',
+                'p.tgl_lahir',
+                'p.alamat',
+                'p.pendidikan',
+                'p.no_ktp',
+                'pt.no_telp',
                 'p.jbtn',
                 'p.departemen',
+                'd.nama as nama_departemen', // Added
+                'p.mulai_kerja',
                 'p.stts_aktif',
                 'p.photo',
-                'p.email',
-                'p.created_at',
-                'p.updated_at',
-                'r.id_role',
-                'r.nama_role'
+                \DB::raw('GROUP_CONCAT(r.id_role SEPARATOR ",") as id_role'),
+                \DB::raw('GROUP_CONCAT(r.nama_role SEPARATOR ", ") as nama_role')
             ])
+            ->groupBy('p.nik', 'p.nama', 'p.jk', 'p.tmp_lahir', 'p.tgl_lahir', 'p.alamat', 'p.pendidikan', 'p.no_ktp', 'pt.no_telp', 'p.jbtn', 'p.departemen', 'd.nama', 'p.mulai_kerja', 'p.stts_aktif', 'p.photo')
             ->orderBy('p.nama', 'asc')
-            ->where('p.stts_aktif', 'AKTIF');
+            ->where('p.stts_aktif', 'AKTIF')
+            ->where('pt.kd_jbtn', '<>', '-');
 
-        $pegawai = $pegawaiQuery->paginate(50, ['*'], 'page', $page);
+        $limit = $request->query('limit', 50);
+        
+        // Ensure limit is reasonable (e.g. max 5000 to prevent OOM)
+        $limit = ($limit > 5000) ? 5000 : $limit;
+
+        $pegawai = $pegawaiQuery->paginate($limit, ['*'], 'page', $page);
 
         // Transform data to match frontend expectations (convert to array)
         $transformedData = [];
         foreach ($pegawai->items() as $item) {
-            // Role data is already included via LEFT JOIN
+            // Handle multiple roles (pick first one for ID, show all for name)
+            $roleIds = $item->id_role ? explode(',', $item->id_role) : [];
+            $primaryRoleId = count($roleIds) > 0 ? (int) $roleIds[0] : null;
+
             $transformedData[] = [
                 'id_user' => $item->id_user,
                 'nip' => $item->nik,
                 'nama' => $item->nama,
+                'jk' => $item->jk,
+                'tmp_lahir' => $item->tmp_lahir,
+                'tgl_lahir' => $item->tgl_lahir,
+                'alamat' => $item->alamat,
+                'pendidikan' => $item->pendidikan,
+                'no_ktp' => $item->no_ktp,
+                'no_telp' => $item->no_telp,
                 'username' => $item->nik, // fallback to nik
-                'email' => $item->email,
-                'id_role' => $item->id_role ? (int) $item->id_role : null,
+                'email' => null, // email column doesn't exist in pegawai table
+                'id_role' => $primaryRoleId,
                 'role_name' => $item->nama_role ?: 'Belum ada role',
                 'status' => $item->stts_aktif === 'AKTIF' ? 1 : 0,
                 'jbtn' => $item->jbtn,
-                'departemen' => $item->departemen,
+                'departemen' => $item->nama_departemen ?? $item->departemen, // Use Name OR Code as fallback
+                'mulai_kerja' => $item->mulai_kerja,
                 'photo' => $item->photo,
-                'created_at' => $item->created_at,
-                'updated_at' => $item->updated_at,
+                'created_at' => null, // created_at doesn't exist in pegawai table
+                'updated_at' => null, // updated_at doesn't exist in pegawai table
             ];
         }
 
@@ -124,6 +154,8 @@ class PegawaiController extends Controller
         try {
             \DB::transaction(function () use ($request) {
                 \App\Models\Pegawai::create($request->all());
+                $sql = "INSERT INTO pegawai (nik, nama, jk, jbtn, departemen, mulai_kerja) VALUES ('{$request->nik}', '{$request->nama}', '{$request->jk}', '{$request->jbtn}', '{$request->departemen}', '{$request->mulai_kerja}')";
+                $this->logTracker($sql, $request);
             });
         } catch (\Exception $e) {
             return \App\Helpers\ApiResponse::error('Failed to save data', 'store_failed', $e->getMessage(), 500);
@@ -150,7 +182,7 @@ class PegawaiController extends Controller
 
         // Pastikan no_ktp selalu include dalam select
         if ($select === '*') {
-            $select = 'nik,nama,jk,jbtn,no_ktp,photo';
+            $select = 'nik,nama,jk,jbtn,no_ktp,photo,tmp_lahir,tgl_lahir,alamat,mulai_kerja,pendidikan,bidang,departemen';
         } else {
             $fields = explode(',', $select);
             if (!in_array('no_ktp', $fields)) {
@@ -170,6 +202,17 @@ class PegawaiController extends Controller
         $pegawai = \App\Models\Pegawai::select(explode(',', $select))
             ->where('nik', $id)
             ->first();
+        
+        // Handle includes manually since we are not using Orion's automatic handling here
+        if ($request->has('include')) {
+            $includes = explode(',', $request->query('include'));
+            $allowedIncludes = ['dep', 'petugas', 'email', 'statusKerja'];
+            $validIncludes = array_intersect($includes, $allowedIncludes);
+            
+            if (!empty($validIncludes)) {
+                $pegawai->load($validIncludes);
+            }
+        }
 
         if (!$pegawai) {
             return \App\Helpers\ApiResponse::notFound('Pegawai not found');
@@ -232,6 +275,8 @@ class PegawaiController extends Controller
         try {
             \DB::transaction(function () use ($request, $pegawai) {
                 $pegawai->update($request->all());
+                $sql = "UPDATE pegawai SET nama='{$request->nama}', jk='{$request->jk}', jbtn='{$request->jbtn}', departemen='{$request->departemen}' WHERE nik='{$id}'";
+                $this->logTracker($sql, $request);
             });
         } catch (\Exception $e) {
             return \App\Helpers\ApiResponse::error('Failed to update data', 'update_failed', $e->getMessage(), 500);
@@ -268,6 +313,8 @@ class PegawaiController extends Controller
 
         try {
             $pegawai->delete();
+            $sql = "DELETE FROM pegawai WHERE nik='{$id}'";
+            $this->logTracker($sql, request());
         } catch (\Exception $e) {
             return \App\Helpers\ApiResponse::error('Failed to delete data', 'delete_failed', $e->getMessage(), 500);
         }
@@ -323,6 +370,9 @@ class PegawaiController extends Controller
                 \App\Models\Pegawai::whereNik($pegawai->nik)->update([
                     'alamat' => $request->alamat,
                 ]);
+
+                $sql = "UPDATE pegawai SET alamat='{$request->alamat}' WHERE nik='{$pegawai->nik}'; UPDATE petugas SET alamat='{$request->alamat}' WHERE nip='{$pegawai->nik}'";
+                $this->logTracker($sql, $request);
             });
         } catch (\Exception $e) {
             return \App\Helpers\ApiResponse::error('Failed to update data', 'update_failed', $e->getMessage(), 500);
@@ -403,5 +453,676 @@ class PegawaiController extends Controller
             "photo"          => ($withRequired ? "required|" : "") . "string",
             "no_ktp"         => ($withRequired ? "required|" : "") . "string",
         ];
+    }
+
+    /**
+     * Search pegawai
+     */
+    public function search(Request $request)
+    {
+        try {
+            $query = $request->get('q');
+            $limit = $request->get('limit', 50);
+
+            if (!$query) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Query parameter is required'
+                ], 400);
+            }
+
+            $pegawai = \DB::table('pegawai as p')
+                ->leftJoin('petugas as pt', 'pt.nip', '=', 'p.nik')
+                ->leftJoin('rsia_user_role as ur', function($join) {
+                    $join->on('ur.nip', '=', 'p.nik')
+                         ->where('ur.is_active', 1);
+                })
+                ->leftJoin('rsia_role as r', 'ur.id_role', '=', 'r.id_role')
+                ->leftJoin('departemen as d', 'd.dep_id', '=', 'p.departemen') // Added Join
+                ->where('p.stts_aktif', 'AKTIF')
+                ->where('pt.kd_jbtn', '<>', '-')
+                ->where(function($q) use ($query) {
+                    $q->where('p.nama', 'like', "%{$query}%")
+                      ->orWhere('p.nik', 'like', "%{$query}%")
+                      ->orWhere('p.jbtn', 'like', "%{$query}%")
+                      ->orWhere('p.departemen', 'like', "%{$query}%");
+                })
+                ->select([
+                    'p.nik as id_user',
+                    'p.nik',
+                    'p.nama',
+                    'p.jk',
+                    'p.tmp_lahir',
+                    'p.tgl_lahir',
+                    'p.alamat',
+                    'p.pendidikan',
+                    'p.no_ktp',
+                    'pt.no_telp',
+                    'p.jbtn',
+                    'p.departemen',
+                    'd.nama as nama_departemen', // Added
+                    'p.mulai_kerja',
+                    'p.stts_aktif',
+                    'p.photo',
+                    \DB::raw('GROUP_CONCAT(r.id_role SEPARATOR ",") as id_role'),
+                    \DB::raw('GROUP_CONCAT(r.nama_role SEPARATOR ", ") as nama_role')
+                ])
+                ->groupBy('p.nik', 'p.nama', 'p.jk', 'p.tmp_lahir', 'p.tgl_lahir', 'p.alamat', 'p.pendidikan', 'p.no_ktp', 'pt.no_telp', 'p.jbtn', 'p.departemen', 'd.nama', 'p.mulai_kerja', 'p.stts_aktif', 'p.photo')
+                ->limit($limit)
+                ->get();
+
+            // Transform data to match frontend expectations
+            $transformedData = [];
+            foreach ($pegawai as $item) {
+                $roleIds = $item->id_role ? explode(',', $item->id_role) : [];
+                $primaryRoleId = count($roleIds) > 0 ? (int) $roleIds[0] : null;
+
+                $transformedData[] = [
+                    'id_user' => $item->id_user,
+                    'nip' => $item->nik,
+                    'nama' => $item->nama,
+                    'jk' => $item->jk,
+                    'tmp_lahir' => $item->tmp_lahir,
+                    'tgl_lahir' => $item->tgl_lahir,
+                    'alamat' => $item->alamat,
+                    'pendidikan' => $item->pendidikan,
+                    'no_ktp' => $item->no_ktp,
+                    'no_telp' => $item->no_telp,
+                    'username' => $item->nik,
+                    'email' => null,
+                    'id_role' => $primaryRoleId,
+                    'role_name' => $item->nama_role ?: 'Belum ada role',
+                    'status' => $item->stts_aktif === 'AKTIF' ? 1 : 0,
+                    'jbtn' => $item->jbtn,
+                    'departemen' => $item->nama_departemen ?? $item->departemen,
+                    'mulai_kerja' => $item->mulai_kerja,
+                    'photo' => $item->photo,
+                    'created_at' => null,
+                    'updated_at' => null,
+                ];
+            }
+
+            return response()->json([
+                'success' => true,
+                'data' => $transformedData
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get user roles for specific pegawai
+     */
+    public function getUserRoles($nip)
+    {
+        try {
+            $userRoles = \DB::table('rsia_user_role as ur')
+                ->join('rsia_role as r', 'ur.id_role', '=', 'r.id_role')
+                ->where('ur.nip', $nip)
+                ->where('ur.is_active', 1)
+                ->select('ur.nip', 'ur.id_role', 'ur.id_user', 'r.nama_role', 'r.deskripsi')
+                ->get();
+
+            return response()->json([
+                'success' => true,
+                'data' => $userRoles
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Assign role to pegawai
+     */
+    public function assignRole(Request $request, $nip)
+    {
+        try {
+            $request->validate([
+                'access_level_id' => 'required|integer|exists:rsia_role,id_role',
+                'user_id' => 'required'
+            ]);
+
+            // Check if pegawai exists
+            $pegawai = \DB::table('pegawai')->where('nik', $nip)->first();
+            if (!$pegawai) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Pegawai not found'
+                ], 404);
+            }
+
+            // Check if validation passed - using simple validation now
+            
+            \DB::beginTransaction();
+
+            // Deactivate ALL existing roles for this user first (enforce single active role)
+            \DB::table('rsia_user_role')
+                ->where('nip', $nip)
+                ->update(['is_active' => 0]);
+
+            // Check if assignment already exists
+            $existingAssignment = \DB::table('rsia_user_role')
+                ->where('nip', $nip)
+                ->where('id_role', $request->access_level_id)
+                ->first();
+
+            if ($existingAssignment) {
+                // Reactivate
+                \DB::table('rsia_user_role')
+                    ->where('nip', $nip)
+                    ->where('id_role', $request->access_level_id)
+                    ->update([
+                        'is_active' => 1,
+                        'updated_by' => $request->user_id
+                    ]);
+            } else {
+                // Create new assignment
+                \DB::table('rsia_user_role')->insert([
+                    'nip' => $nip,
+                    'id_role' => $request->access_level_id,
+                    'id_user' => $nip,  // Fixed: Use target employee's NIP, not logged-in user ID
+                    'is_active' => 1,
+                    'created_by' => $request->user_id,
+                    'created_at' => now(),
+                    'updated_at' => now()
+                ]);
+            }
+
+            $sql = "INSERT/UPDATE rsia_user_role SET is_active=1 WHERE nip='{$nip}' AND id_role='{$request->access_level_id}'";
+            $this->logTracker($sql, $request);
+
+            \DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Role berhasil ditugaskan ke pegawai (role sebelumnya dinonaktifkan)'
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'error' => $e->getMessage()
+            ], 422);
+        }
+    }
+
+    /**
+     * Remove role from pegawai
+     */
+    public function removeRole($nip, $roleId)
+    {
+        try {
+            $affected = \DB::table('rsia_user_role')
+                ->where('nip', $nip)
+                ->where('id_role', $roleId)
+                ->update([
+                    'is_active' => 0,
+                    'updated_at' => now()
+                ]);
+
+            $sql = "UPDATE rsia_user_role SET is_active=0 WHERE nip='{$nip}' AND id_role='{$roleId}'";
+            $this->logTracker($sql, request());
+
+            if ($affected === 0) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Assignment not found'
+                ], 404);
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Role berhasil dihapus dari pegawai'
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Remove role from pegawai
+     */
+    protected function getMedisEducationList()
+    {
+        // Cache for 60 minutes to reduce DB load
+        return \Illuminate\Support\Facades\Cache::remember('medis_education_list', 60 * 60, function () {
+            return \Illuminate\Support\Facades\DB::table('rsia_pendidikan_str')
+                ->pluck('kode_tingkat')
+                ->toArray();
+        });
+    }
+
+    /**
+     * Get pegawai statistics
+     */
+    public function getStatistics()
+    {
+        try {
+            $stats = [
+                'total_pegawai' => \DB::table('pegawai')->where('stts_aktif', 'AKTIF')->count(),
+                'active_users' => \DB::table('pegawai')->where('stts_aktif', 'AKTIF')->count(),
+                'users_with_roles' => \DB::table('rsia_user_role')
+                    ->where('is_active', 1)
+                    ->distinct('nip')
+                    ->count(),
+                'users_without_roles' => \DB::table('pegawai')
+                    ->where('stts_aktif', 'AKTIF')
+                    ->whereNotIn('nik', function($query) {
+                        $query->select('nip')
+                              ->from('rsia_user_role')
+                              ->where('is_active', 1);
+                    })
+                    ->count(),
+                'total_roles' => \DB::table('rsia_role')->where('is_active', 1)->count()
+            ];
+
+            return response()->json([
+                'success' => true,
+                'data' => $stats
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get simplified pegawai list for dropdown
+     */
+    protected $medisKeywords = [
+        'Dokter', 'Perawat', 'Bidan', 'Apoteker', 'Farmasi', 
+        'Analis', 'Radiografer', 'Fisioterapis', 'Gizi', 
+        'Sanitarian', 'Perekam Medis', 'Terafis', 'Elektromedis'
+    ];
+
+    protected $kelompokRules = [
+        'PERAWAT' => ['keywords' => ['Perawat', 'Ners']],
+        'BIDAN' => ['keywords' => ['Bidan']],
+        'MEDIS' => ['keywords' => ['Dokter']],
+        'FARMASI' => ['keywords' => ['Farmasi', 'Apoteker', 'TTK', 'Tenaga Teknis Kefarmasian']],
+        'ANALIS' => ['keywords' => ['Analis', 'Laborat', 'ATLM']],
+        'GIZI' => ['keywords' => ['Nutrisionis', 'Koordinator Gizi']],
+        'SANITARIAN' => ['keywords' => ['Sanitarian', 'Kesehatan Lingkungan', 'Kesling']],
+        'TEKNISI ELEKTROMEDIS' => ['keywords' => ['Elektromedis', 'ATEM', 'Teknisi Medis', 'Elektromedik']],
+        'RADIOGRAFER' => ['keywords' => ['Radiografer', 'Radiologi']],
+        'RM' => ['keywords' => ['Perekam Medis', 'Rekam Medis']],
+    ];
+
+    public function list(Request $request)
+    {
+        $limit = $request->input('limit', 0);
+        $offset = $request->input('offset', 0);
+        $search = $request->input('search', null);
+        
+        // Filter params
+        $status_kerja = $request->input('stts_kerja', null);
+        $jk = $request->input('jk', null);
+        $departemen = $request->input('departemen', null);
+        $kategori = $request->input('kategori', null); // Jabatan name
+        
+        $query = Pegawai::query()
+            ->with(['dep', 'statusKerja', 'petugas.jabatan']) 
+            ->select('nik', 'nama', 'jbtn', 'departemen', 'jk', 'stts_kerja', 'pendidikan')
+            ->orderBy('nama', 'ASC') // Default sort by Name
+            ->where('stts_aktif', 'AKTIF')
+            ->whereHas('petugas', function($q) {
+                $q->where('kd_jbtn', '!=', '-');
+            });
+
+        // 1. Filter by Gender
+        $query->when($request->jk, function ($q, $jk) {
+            if ($jk == 'L') {
+                return $q->whereIn('jk', ['L', 'LAKI-LAKI', 'PRIA']);
+            } elseif ($jk == 'P') {
+                return $q->whereIn('jk', ['P', 'PEREMPUAN', 'WANITA']);
+            }
+            return $q->where('jk', $jk);
+        });
+
+        // 2. Filter by Status Kerja (Name or Code)
+        $query->when($request->stts_kerja, function ($q, $stts) {
+            return $q->whereHas('statusKerja', function($sub) use ($stts) {
+                $sub->where('ktg', 'like', "%{$stts}%")
+                    ->orWhere('stts', $stts);
+            });
+        });
+
+        // 3. Filter by Unit Kerja/Departemen (Name or Code)
+        $query->when($request->departemen, function ($q, $dept) {
+            return $q->whereHas('dep', function($sub) use ($dept) {
+                $sub->where('nama', 'like', "%{$dept}%")
+                    ->orWhere('dep_id', $dept);
+            });
+        });
+
+        // 4. Filter by Medis/Non-Medis (EDUCATION BASED)
+        if ($request->has('is_medis')) {
+            $val = strtolower((string)$request->is_medis);
+            $isMedis = ($val === 'true' || $val === '1');
+            $medisEducation = $this->getMedisEducationList();
+
+            if ($isMedis) {
+                $query->whereIn('pendidikan', $medisEducation);
+            } else {
+                $query->whereNotIn('pendidikan', $medisEducation);
+            }
+        }
+        
+        // 5. Filter by Kelompok Profesi (New)
+        if ($request->has('kelompok')) {
+            $kelompok = strtoupper($request->kelompok);
+
+            if ($kelompok === 'NON_MEDIS_LAIN') {
+                 // SPECIAL CASE: Show Only Non-Medis that are NOT in any other group
+                 // 1. Must be Non-Medis by Education
+                 $medisEducation = $this->getMedisEducationList();
+                 $query->whereNotIn('pendidikan', $medisEducation);
+
+                 // 2. Must NOT match any other Kelompok keywords
+                 $query->where(function($sub) {
+                     foreach ($this->kelompokRules as $rule) {
+                         $keywords = $rule['keywords'];
+                         foreach ($keywords as $k) {
+                             $sub->where('jbtn', 'not like', "%$k%")
+                                 ->whereDoesntHave('petugas.jabatan', function($rel) use ($k) {
+                                     $rel->where('nm_jbtn', 'like', "%$k%");
+                                 });
+                         }
+                     }
+                 });
+
+            } elseif (isset($this->kelompokRules[$kelompok])) {
+                $keywords = $this->kelompokRules[$kelompok]['keywords'];
+                $query->where(function($q) use ($keywords, $kelompok) {
+                    // 1. Keyword Match
+                    foreach ($keywords as $k) {
+                        $q->orWhere('jbtn', 'like', "%$k%")
+                          ->orWhereHas('petugas.jabatan', function($sub) use ($k) {
+                              $sub->where('nm_jbtn', 'like', "%$k%");
+                          });
+                    }
+
+                    // 2. Education Match (Specific for PERAWAT and BIDAN)
+                    if ($kelompok === 'PERAWAT') {
+                         $q->orWhere('pendidikan', 'like', '%Keperawatan%')
+                           ->orWhere('pendidikan', 'like', '%Ners%');
+                    } elseif ($kelompok === 'BIDAN') {
+                         $q->orWhere('pendidikan', 'like', '%Kebidanan%')
+                           ->orWhere('pendidikan', 'like', '%Bidan%');
+                    } elseif ($kelompok === 'MEDIS') {
+                         $q->orWhere('pendidikan', 'like', '%Dokter%')
+                           ->orWhere('pendidikan', 'like', '%Profesi Dokter%')
+                           ->orWhere('pendidikan', 'like', '%S2 Medis%');
+                    }
+                });
+            }
+        } elseif ($request->has('pendidikan') && $request->pendidikan) {
+            // Filter by Education Level
+            $pendidikan = $request->pendidikan;
+            $query->where('pendidikan', $pendidikan);
+        } elseif ($request->has('kategori') && $request->kategori) {
+             // Legacy/Specific drilldown
+            $kategori = $request->kategori;
+            $query->where('jbtn', 'like', "%{$kategori}%");
+        }
+
+        // 6. Search
+        $query->when($request->search, function ($q, $search) {
+            return $q->where(function($sub) use ($search) {
+                $sub->where('nik', 'like', "%{$search}%")
+                    ->orWhere('nama', 'like', "%{$search}%");
+            });
+        });
+
+        $limit = (int) $request->input('limit', 100);
+        $data = $query->limit($limit)->get();
+
+        $data->transform(function($item) {
+            $item->departemen = $item->dep ? $item->dep->nama : ($item->departemen ?: '-');
+            $item->stts_kerja = $item->statusKerja ? $item->statusKerja->ktg : ($item->stts_kerja ?: '-');
+            return $item;
+        });
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Data Pegawai berhasil diambil',
+            'meta' => [
+                'filters' => $request->all(),
+                'limit' => $limit,
+                'count' => $data->count()
+            ],
+            'data' => $data
+        ]);
+    }
+
+    public function statistik()
+    {
+        // Get all active employees with valid petugas position
+        $pegawai = Pegawai::where('stts_aktif', 'AKTIF')
+            ->whereHas('petugas', function($q) {
+                $q->where('kd_jbtn', '!=', '-');
+            })
+            ->with(['dep', 'statusKerja', 'petugas.jabatan']) // Eager load department & status kerja & jabatan petugas
+            ->select('nik', 'jbtn', 'jnj_jabatan', 'jk', 'stts_kerja', 'departemen', 'pendidikan')
+            ->get();
+
+        $total = $pegawai->count();
+        
+        // --- 1. Profesi (Medis vs Non-Medis) BY DEPARTEMEN NAME ---
+        // USING EDUCATION BASED LOGIC
+        $medisEducation = $this->getMedisEducationList();
+
+        $profesiStats = [
+            'medis' => ['total' => 0, 'details' => []],
+            'non_medis' => ['total' => 0, 'details' => []]
+        ];
+
+        // Grouping
+        $medisGroups = [];
+        $nonMedisGroups = [];
+
+        foreach ($pegawai as $p) {
+            $jabatan = $p->jbtn ?: '';
+            // Use Department Name
+            $deptName = $p->dep ? $p->dep->nama : ($p->departemen ?: 'Lain-lain');
+
+            // Check Medis based on Education
+            $isMedis = in_array($p->pendidikan, $medisEducation);
+
+            if ($isMedis) {
+                $profesiStats['medis']['total']++;
+                if (!isset($medisGroups[$deptName])) $medisGroups[$deptName] = 0;
+                $medisGroups[$deptName]++;
+            } else {
+                $profesiStats['non_medis']['total']++;
+                if (!isset($nonMedisGroups[$deptName])) $nonMedisGroups[$deptName] = 0;
+                $nonMedisGroups[$deptName]++;
+            }
+        }
+        
+        // Format Details
+        foreach ($medisGroups as $dept => $count) {
+            $profesiStats['medis']['details'][] = ['name' => $dept, 'count' => $count];
+        }
+        foreach ($nonMedisGroups as $dept => $count) {
+            $profesiStats['non_medis']['details'][] = ['name' => $dept, 'count' => $count];
+        }
+        
+        // Sorting
+        usort($profesiStats['medis']['details'], fn($a, $b) => $b['count'] <=> $a['count']);
+        usort($profesiStats['non_medis']['details'], fn($a, $b) => $b['count'] <=> $a['count']);
+
+
+        // --- 2. Gender (L/P) ---
+        $genderStats = $pegawai->groupBy(function($item) {
+            $jk = strtoupper(trim($item->jk));
+            if (in_array($jk, ['L', 'LAKI-LAKI', 'PRIA'])) return 'L';
+            if (in_array($jk, ['P', 'PEREMPUAN', 'WANITA'])) return 'P';
+            return 'OTHER';
+        })->map(function ($group) {
+            return $group->count();
+        });
+
+        // Rename keys
+        $genderFormatted = [
+            ['name' => 'Laki-laki', 'code' => 'L', 'count' => $genderStats['L'] ?? 0],
+            ['name' => 'Perempuan', 'code' => 'P', 'count' => $genderStats['P'] ?? 0]
+        ];
+
+
+        // --- 3. Status Kerja ---
+        // Group by Status Kerja Name (ktg)
+        $statusKerjaGroups = $pegawai->groupBy(function($item) {
+            return $item->statusKerja ? $item->statusKerja->ktg : ($item->stts_kerja ?: 'Lain-lain');
+        })->map(function ($group) {
+            return $group->count();
+        })->sortDesc();
+        
+        $statusKerjaFormatted = [];
+        foreach ($statusKerjaGroups as $name => $count) {
+            $statusKerjaFormatted[] = ['name' => $name, 'count' => $count];
+        }
+
+
+        // --- 4. Unit Kerja (Departemen) ---
+        // Group by Department Name
+        $unitKerjaGroups = $pegawai->groupBy(function($item) {
+            return $item->dep ? $item->dep->nama : ($item->departemen ?: 'Lain-lain');
+        })->map(function ($group) {
+            return $group->count();
+        })->sortDesc();
+
+        $unitKerjaFormatted = [];
+        foreach ($unitKerjaGroups as $name => $count) {
+            $unitKerjaFormatted[] = ['name' => $name, 'count' => $count];
+        }
+
+
+        // --- 5. Pendidikan (Education Level) ---
+        $pendidikanGroups = $pegawai->groupBy(function($item) {
+            return $item->pendidikan ?: 'Tidak Diketahui';
+        })->map(function ($group) {
+            return $group->count();
+        })->sortDesc();
+
+        $pendidikanFormatted = [];
+        foreach ($pendidikanGroups as $name => $count) {
+            $pendidikanFormatted[] = ['name' => $name, 'count' => $count];
+        }
+
+
+        // --- 6. Kelompok Profesi (Based on Reference) ---
+        $kelompokStats = [
+            'NON MEDIS' => ['count' => 0, 'filter_key' => 'kelompok', 'filter_val' => 'NON_MEDIS_LAIN']
+        ];
+        
+        // Initialize counts
+        foreach ($this->kelompokRules as $key => $rule) {
+            $kelompokStats[$key] = [
+                'count' => 0, 
+                'filter_key' => 'kelompok', 
+                'filter_val' => $key
+            ];
+        }
+
+        foreach ($pegawai as $p) {
+            $jabatan = $p->jbtn ?: '';
+            
+            // Get Jabatan from Petugas if available
+            $jabatanPetugas = ($p->petugas && $p->petugas->jabatan) ? $p->petugas->jabatan->nm_jbtn : '';
+
+            $matched = false;
+
+            foreach ($this->kelompokRules as $key => $rule) {
+                // Check Keywords
+                foreach ($rule['keywords'] as $k) {
+                    if (stripos($jabatan, $k) !== false || stripos($jabatanPetugas, $k) !== false) {
+                        $kelompokStats[$key]['count']++;
+                        $matched = true;
+                        break 2;
+                    }
+                }
+
+                // Check Education (Specific for PERAWAT and BIDAN)
+                if ($key === 'PERAWAT') {
+                    if (stripos($p->pendidikan, 'Keperawatan') !== false || stripos($p->pendidikan, 'Ners') !== false) {
+                         $kelompokStats[$key]['count']++;
+                         $matched = true;
+                         break;
+                    }
+                } elseif ($key === 'BIDAN') {
+                    if (stripos($p->pendidikan, 'Kebidanan') !== false || stripos($p->pendidikan, 'Bidan') !== false) {
+                         $kelompokStats[$key]['count']++;
+                         $matched = true;
+                         break;
+                    }
+                } elseif ($key === 'MEDIS') {
+                    if (stripos($p->pendidikan, 'Dokter') !== false || stripos($p->pendidikan, 'Profesi Dokter') !== false || stripos($p->pendidikan, 'S2 Medis') !== false) {
+                         $kelompokStats[$key]['count']++;
+                         $matched = true;
+                         break;
+                    }
+                }
+            }
+
+            if (!$matched) {
+                // Check Medis based on Education
+                $isMedis = in_array($p->pendidikan, $medisEducation);
+                
+                if (!$isMedis) {
+                    $kelompokStats['NON MEDIS']['count']++;
+                } else {
+                    // Falls into 'Medis Lainnya' if we had a category for it
+                }
+            }
+        }
+
+        // Format for response
+        $kelompokFormatted = [];
+        foreach ($kelompokStats as $name => $data) {
+            if ($data['count'] > 0) {
+                $kelompokFormatted[] = [
+                    'name' => $name,
+                    'count' => $data['count'],
+                    'filter_key' => $data['filter_key'],
+                    'filter_val' => $data['filter_val']
+                ];
+            }
+        }
+        
+        // Sort: Medis types explicitly then others? Or just count?
+        // Let's sort by count desc
+        usort($kelompokFormatted, fn($a, $b) => $b['count'] <=> $a['count']);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Statistik Pegawai berhasil diambil',
+            'data' => $stats = [ // Assign to variable for return 
+                'total' => $total,
+                'profesi' => $profesiStats,
+                'gender' => $genderFormatted,
+                'status_kerja' => $statusKerjaFormatted,
+                'unit_kerja' => $unitKerjaFormatted,
+                'pendidikan' => $pendidikanFormatted,
+                'kelompok_profesi' => $kelompokFormatted
+            ]
+        ]);
     }
 }

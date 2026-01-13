@@ -94,4 +94,17 @@ class RsiaUndangan extends Model
     {
         return $this->morphTo(__FUNCTION__, 'model', 'surat_id');
     }
+
+    /**
+     * Scope for filtering by penerima
+     */
+    public function scopeFilterByPenerima($query, $value)
+    {
+        return $query->whereHas('peserta', function($q) use ($value) {
+            $q->where('penerima', $value)
+              ->orWhereHas('pegawai', function($qp) use ($value) {
+                  $qp->where('id', $value);
+              });
+        });
+    }
 }

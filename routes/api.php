@@ -58,6 +58,7 @@ Route::middleware(['claim:role,pegawai|dokter|pasien'])->prefix('notification')-
     });
 });
 
+
 // ========== OTP ==========
 Route::prefix('otp')->middleware(['detail-user', 'claim:role,pegawai|dokter|pasien'])->group(function () {
     Route::post('create', [RsiaOtpController::class, 'createOtp']);
@@ -66,6 +67,9 @@ Route::prefix('otp')->middleware(['detail-user', 'claim:role,pegawai|dokter|pasi
     Route::middleware(['claim:dep,IT'])->post('invalidate-expired', [RsiaOtpController::class, 'invalidateExpiredOtps']);
 });
 // ======== END OTP ========
+
+// Logistik Master Data routes moved to routes/partials/logistik.php
+
 
 // Temporary test route for satu_sehat_mapping_lab
 Route::get('/test-mapping-templates', function () {
@@ -84,6 +88,8 @@ Route::get('/test-mapping-templates', function () {
     }
 });
 
+
+
 $files = scandir(__DIR__ . '/partials');
 foreach ($files as $file) {
     // if file is not a directory
@@ -92,6 +98,12 @@ foreach ($files as $file) {
         require_once __DIR__ . '/partials/' . $file;
     }
 }
+
+    // Rawat Jalan
+    require __DIR__ . '/partials/rawat-jalan.php';
+
+    // Rawat Inap
+    require __DIR__ . '/partials/rawat-inap.php';
 
 require_once __DIR__ . '/eklaim-api.php';
 require_once __DIR__ . '/oauth-api.php';

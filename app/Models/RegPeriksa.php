@@ -107,6 +107,7 @@ class RegPeriksa extends Model
      * @var bool
      * */
     public $incrementing = false;
+    protected $keyType = 'string';
 
     /**
      * The attributes that should be cast.
@@ -195,6 +196,16 @@ class RegPeriksa extends Model
     public function caraBayar()
     {
         return $this->belongsTo(Penjab::class, 'kd_pj', 'kd_pj');
+    }
+
+    /**
+     * Get the skrining gizi for this registration.
+     * 
+     * @return \Illuminate\Database\Eloquent\Relations\HasOne
+     */
+    public function skriningGizi()
+    {
+        return $this->hasOne(RsiaSkriningGizi::class, 'no_rawat', 'no_rawat');
     }
 
     /**

@@ -129,22 +129,29 @@ class ErmController extends Controller
                     $results = [];
 
                     // Primary: Get data from detail_pemberian_obat (administrasi/pemberian obat)
-                    $details = DetailPemberianObat::with(['aturanPakai'])
+                    $details = DetailPemberianObat::with(['aturanPakai', 'obat.jenis'])
                         ->where('tgl_perawatan', $resep->tgl_perawatan)
                         ->where('jam', $resep->jam)
                         ->where('no_rawat', $resep->no_rawat)
-                        ->get();
+                        ->get()
+                        ->filter(function($detail) {
+                            // Filter untuk mengambil selain jenis obat ALKES
+                            $obat = $detail->obat;
+                            if (!$obat || !$obat->jenis) {
+                                return true; // Include jika tidak ada data jenis
+                            }
+                            return $obat->jenis->nama !== 'ALKES';
+                        });
 
                     foreach ($details as $detail) {
-                        $dataBarang = \App\Models\DataBarang::where('kode_brng', $detail->kode_brng)->first();
-                        $namaObat = $dataBarang->nama_brng ?? ($detail->kode_brng . ' (Tidak ada di master DataBarang)');
-                        $satuan = $dataBarang->kode_sat ?? 'N/A';
+                        $namaObat = $detail->obat->nama_brng ?? ($detail->kode_brng . ' (Tidak ada di master DataBarang)');
+                        $satuan = $detail->obat->kode_sat ?? 'N/A';
 
                         // Get category name
                         $kategori = 'Obat';
-                        if ($dataBarang && $dataBarang->kode_kategori) {
+                        if ($detail->obat && $detail->obat->kode_kategori) {
                             $kategoriData = DB::table('kategori_barang')
-                                ->where('kode', $dataBarang->kode_kategori)
+                                ->where('kode', $detail->obat->kode_kategori)
                                 ->first();
                             $kategori = $kategoriData->nama ?? 'Obat';
                         }
@@ -219,8 +226,14 @@ class ErmController extends Controller
                         $racikanDetails = DB::table('resep_dokter_racikan_detail')
                             ->join('databarang', 'resep_dokter_racikan_detail.kode_brng', '=', 'databarang.kode_brng')
                             ->leftJoin('kategori_barang', 'databarang.kode_kategori', '=', 'kategori_barang.kode')
+                            ->leftJoin('jenis', 'databarang.kdjns', '=', 'jenis.kdjns')
                             ->where('resep_dokter_racikan_detail.no_resep', $racikan->no_resep)
                             ->where('resep_dokter_racikan_detail.no_racik', $racikan->no_racik)
+                            ->where(function($query) {
+                                // Filter untuk mengambil selain jenis obat ALKES
+                                $query->whereNull('jenis.nama')
+                                      ->orWhere('jenis.nama', '!=', 'ALKES');
+                            })
                             ->select(
                                 'resep_dokter_racikan_detail.kode_brng',
                                 'resep_dokter_racikan_detail.jml',

@@ -36,7 +36,7 @@ class JadwalPoli extends Model
 
     protected $primaryKey = ['kd_dokter', 'hari_kerja', 'jam_mulai'];
 
-    // protected $guarded = [];
+    protected $fillable = ['kd_dokter', 'hari_kerja', 'jam_mulai', 'jam_selesai', 'kd_poli', 'kuota'];
 
     public $timestamps = false;
 

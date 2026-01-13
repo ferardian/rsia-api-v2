@@ -9,7 +9,7 @@ use Thiagoprz\CompositeKey\HasCompositeKey;
 
 class RsiaOperasiSafe extends Model
 {
-    use HasFactory, HasCompositeKey, Compoships;
+    use HasFactory, Compoships;
 
     protected $table = 'rsia_operasi_safe';
 
@@ -27,6 +27,8 @@ class RsiaOperasiSafe extends Model
      *
      * @var string[]
      */
+    protected $guarded = [];
+    
     public function scopeWithAllRelations()
     {
         return $this->with([
@@ -42,9 +44,17 @@ class RsiaOperasiSafe extends Model
     }
 
     /**
+     * Get the regPeriksa that owns the Operasi
+     */
+    public function regPeriksa()
+    {
+        return $this->belongsTo(RegPeriksa::class, 'no_rawat', 'no_rawat');
+    }
+
+    /**
      * Get the laporan that owns the Operasi
      *
-     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
+     * @return \Illuminate\Database\Eloquent\Relations\HasOne
      */
     public function laporan()
     {

@@ -7,6 +7,7 @@ use App\Helpers\ApiResponse;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use App\Models\RsiaPenerimaUndangan;
+use App\Models\RsiaUndangan;
 
 class RsiaUndanganController extends Controller
 {
@@ -256,30 +257,34 @@ class RsiaUndanganController extends Controller
      * @param  string $base64_no_surat
      * @return \Illuminate\Http\Response
      */
-    public function notulen($base64_no_surat)
+    public function notulen($base64_id)
     {
         try {
-            $no_surat = base64_decode($base64_no_surat);
-            $undangan = RsiaPenerimaUndangan::where('no_surat', $no_surat)->first();
-
+            $base64_id = str_replace(['-', '_'], ['+', '/'], $base64_id);
+            $id = base64_decode($base64_id);
+            
+            // Try finding by ID first
+            $undangan = RsiaUndangan::find($id);
+            
             if (!$undangan) {
                 return response()->json(['message' => 'Data tidak ditemukan'], 404);
             }
 
             $model = new $undangan->model;
-            $undangan = $model->with(['penanggungJawab' => function($qq) {
+            // Use surat_id instead of no_surat
+            $surat = $model->with(['penanggungJawab' => function($qq) {
                 return $qq->select('nik', 'nama');
-            }])->find($no_surat);
+            }])->find($undangan->surat_id);
 
-            if (!$undangan) {
+            if (!$surat) {
                 return response()->json(['message' => 'Data tidak ditemukan'], 404);
             }
 
-            $notulen = RsiaNotulen::where('no_surat', $no_surat)->with('notulis')->first();
+            $notulen = RsiaNotulen::where('no_surat', $undangan->surat_id)->with('notulis')->first();
 
-            $undangan->notulen = $notulen;
+            $surat->notulen = $notulen;
             
-            return new \App\Http\Resources\RealDataResource($undangan);
+            return new \App\Http\Resources\RealDataResource($surat);
         } catch (\Exception $e) {
             return response()->json(['message' => $e->getMessage()], 500);
         }

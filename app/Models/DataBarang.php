@@ -84,4 +84,34 @@ class DataBarang extends Model
     {
         return $this->belongsTo(KodeSatuan::class, 'kode_sat', 'kode_sat');
     }
+
+    public function satuanBesar()
+    {
+        return $this->belongsTo(KodeSatuan::class, 'kode_satbesar', 'kode_sat');
+    }
+
+    public function jenis()
+    {
+        return $this->belongsTo(Jenis::class, 'kdjns', 'kdjns');
+    }
+
+    public function industri()
+    {
+        return $this->belongsTo(IndustriFarmasi::class, 'kode_industri', 'kode_industri');
+    }
+
+    public function golongan()
+    {
+        return $this->belongsTo(GolonganBarang::class, 'kode_golongan', 'kode');
+    }
+
+    public function kategori()
+    {
+        return $this->belongsTo(KategoriBarang::class, 'kode_kategori', 'kode');
+    }
+
+    public function riwayat()
+    {
+        return $this->hasMany(RiwayatBarangMedis::class, 'kode_brng', 'kode_brng');
+    }
 }
