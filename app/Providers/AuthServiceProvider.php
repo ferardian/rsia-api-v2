@@ -33,8 +33,19 @@ class AuthServiceProvider extends ServiceProvider
 
         Passport::routes();
 
-        Passport::tokensExpireIn(now()->addDays(15));
-        Passport::refreshTokensExpireIn(now()->addDays(30));
-        Passport::personalAccessTokensExpireIn(now()->addDay(7));
+        // Default expiration: 60 minutes (Web)
+        $expireTime = now()->addMinutes(60);
+        $refreshExpireTime = now()->addDays(7);
+
+        // Conditional expiration for Mobile App
+        // Check custom header or other identifiers
+        if (request()->header('X-App-Type') == 'mobile' || request()->input('is_mobile')) {
+            $expireTime = now()->addDays(15);
+            $refreshExpireTime = now()->addDays(30);
+        }
+
+        Passport::tokensExpireIn($expireTime);
+        Passport::refreshTokensExpireIn($refreshExpireTime);
+        Passport::personalAccessTokensExpireIn($expireTime);
     }
 }
