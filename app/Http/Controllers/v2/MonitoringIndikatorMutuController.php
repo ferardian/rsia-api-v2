@@ -28,6 +28,7 @@ class MonitoringIndikatorMutuController extends Controller
                 'id_inmut',
                 DB::raw('SUM(num) as total_num'),
                 DB::raw('SUM(denum) as total_denum'),
+                DB::raw('MAX(tanggal_inmut) as last_filled'),
                 DB::raw('MAX(tanggal_input) as last_update')
             )
             ->whereYear('tanggal_inmut', $year)
@@ -62,15 +63,25 @@ class MonitoringIndikatorMutuController extends Controller
 
         $indicators = $indicators->paginate($limit);
 
-        // Fetch rekap data for the indicators in current page
+        // Fetch rekap data for the indicators in current page (for monthly totals)
         $indicatorIds = $indicators->pluck('id_inmut')->toArray();
         $rekapData = $rekapQuery->whereIn('id_inmut', $indicatorIds)->get()->keyBy('id_inmut');
 
+        // Fetch GLOBAL last filled date (across all months)
+        $globalLastFilled = RsiaRekapInmut::select('id_inmut', DB::raw('MAX(tanggal_inmut) as last_filled'))
+            ->whereIn('id_inmut', $indicatorIds)
+            ->groupBy('id_inmut')
+            ->get()
+            ->keyBy('id_inmut');
+
         // Merge aggregation into indicators
-        $indicators->getCollection()->transform(function ($item) use ($rekapData) {
+        $indicators->getCollection()->transform(function ($item) use ($rekapData, $globalLastFilled) {
             $rekap = $rekapData->get($item->id_inmut);
+            $global = $globalLastFilled->get($item->id_inmut);
+
             $item->total_num = $rekap ? $rekap->total_num : 0;
             $item->total_denum = $rekap ? $rekap->total_denum : 0;
+            $item->last_filled = $global ? $global->last_filled : null;
             
             // Calculate Score
             // Logic depends on formula, but usually (Num / Denum) * 100 or just Num/Denum
