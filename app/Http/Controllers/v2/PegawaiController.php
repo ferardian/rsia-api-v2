@@ -153,8 +153,28 @@ class PegawaiController extends Controller
 
         try {
             \DB::transaction(function () use ($request) {
+                // Determine JK for Petugas (L/P)
+                $jkPetugas = $request->jk == 'Pria' ? 'L' : 'P';
+                
+                // Create Pegawai
                 \App\Models\Pegawai::create($request->all());
-                $sql = "INSERT INTO pegawai (nik, nama, jk, jbtn, departemen, mulai_kerja) VALUES ('{$request->nik}', '{$request->nama}', '{$request->jk}', '{$request->jbtn}', '{$request->departemen}', '{$request->mulai_kerja}')";
+                
+                // Create Petugas if not exists
+                \App\Models\Petugas::updateOrCreate(['nip' => $request->nik], [
+                    'nama'       => $request->nama,
+                    'jk'         => $jkPetugas,
+                    'tmp_lahir'  => $request->tmp_lahir,
+                    'tgl_lahir'  => $request->tgl_lahir,
+                    'gol_darah'  => $request->gol_darah ?? '-',
+                    'agama'      => $request->agama ?? '-',
+                    'stts_nikah' => $request->stts_nikah ?? 'BELUM MENIKAH',
+                    'alamat'     => $request->alamat,
+                    'kd_jbtn'    => $request->kd_jbtn ?? '-',
+                    'no_telp'    => $request->no_telp ?? '-',
+                    'status'     => 1
+                ]);
+
+                $sql = "INSERT/UPDATE pegawai & petugas for nik: {$request->nik}";
                 $this->logTracker($sql, $request);
             });
         } catch (\Exception $e) {
@@ -180,15 +200,13 @@ class PegawaiController extends Controller
     {
         $select = $request->query('select', '*');
 
-        // Pastikan no_ktp selalu include dalam select
-        if ($select === '*') {
-            $select = 'nik,nama,jk,jbtn,no_ktp,photo,tmp_lahir,tgl_lahir,alamat,mulai_kerja,pendidikan,bidang,departemen';
-        } else {
-            $fields = explode(',', $select);
-            if (!in_array('no_ktp', $fields)) {
-                $fields[] = 'no_ktp';
-            }
-            $select = implode(',', $fields);
+        // Use array for select, or * if default
+        $fields = $select === '*' ? ['*'] : explode(',', $select);
+        
+        // Ensure internal keys are present if we have a specific select
+        if ($select !== '*') {
+            if (!in_array('nik', $fields)) $fields[] = 'nik';
+            if (!in_array('no_ktp', $fields)) $fields[] = 'no_ktp';
         }
 
         // Debug: log apa yang ada di database
@@ -199,7 +217,7 @@ class PegawaiController extends Controller
             'all_data' => $pegawaiRaw ? $pegawaiRaw->toArray() : 'not found'
         ]);
 
-        $pegawai = \App\Models\Pegawai::select(explode(',', $select))
+        $pegawai = \App\Models\Pegawai::select($fields)
             ->where('nik', $id)
             ->first();
         
@@ -218,14 +236,10 @@ class PegawaiController extends Controller
             return \App\Helpers\ApiResponse::notFound('Pegawai not found');
         }
 
-        $result = new \App\Http\Resources\Pegawai\CompleteResource($pegawai);
-
-        // Debug: log hasil resource
-        \Log::info('CompleteResource result', [
-            'result' => $result->toArray($request)
+        return response()->json([
+            'success' => true,
+            'data' => new \App\Http\Resources\Pegawai\CompleteResource($pegawai)
         ]);
-
-        return $result;
     }
 
     /**
@@ -273,9 +287,29 @@ class PegawaiController extends Controller
         }
 
         try {
-            \DB::transaction(function () use ($request, $pegawai) {
+            \DB::transaction(function () use ($request, $pegawai, $id) {
+                // Update Pegawai
                 $pegawai->update($request->all());
-                $sql = "UPDATE pegawai SET nama='{$request->nama}', jk='{$request->jk}', jbtn='{$request->jbtn}', departemen='{$request->departemen}' WHERE nik='{$id}'";
+
+                // Determine JK for Petugas (L/P)
+                $jkPetugas = $request->jk == 'Pria' ? 'L' : 'P';
+
+                // Update or Create Petugas
+                \App\Models\Petugas::updateOrCreate(['nip' => $id], [
+                    'nama'       => $request->nama,
+                    'jk'         => $jkPetugas,
+                    'tmp_lahir'  => $request->tmp_lahir,
+                    'tgl_lahir'  => $request->tgl_lahir,
+                    'gol_darah'  => $request->gol_darah ?? '-',
+                    'agama'      => $request->agama ?? '-',
+                    'stts_nikah' => $request->stts_nikah ?? 'BELUM MENIKAH',
+                    'alamat'     => $request->alamat,
+                    'kd_jbtn'    => $request->kd_jbtn ?? '-',
+                    'no_telp'    => $request->no_telp ?? '-',
+                    'status'     => (isset($request->stts_aktif) && $request->stts_aktif == 'AKTIF') ? 1 : 0
+                ]);
+
+                $sql = "UPDATE pegawai & petugas for nik: {$id}";
                 $this->logTracker($sql, $request);
             });
         } catch (\Exception $e) {
@@ -423,7 +457,7 @@ class PegawaiController extends Controller
             "jk"             => "required|string|in:Wanita,Pria",
             "jbtn"           => "required|string",
             "jnj_jabatan"    => "required|string|exists:jnj_jabatan,kode",
-            "kode_kelompok"  => ($withRequired ? "required|" : "") . "string|exists:kelompok,kode_kelompok",
+            "kode_kelompok"  => ($withRequired ? "required|" : "") . "string|exists:kelompok_jabatan,kode_kelompok",
             "kode_resiko"    => "required|string|exists:resiko_kerja,kode_resiko",
             "kode_emergency" => ($withRequired ? "required|" : "") . "string|exists:emergency_index,kode_emergency",
             "status_koor"    => ($withRequired ? "required|" : "") . "string|in:0,1",
