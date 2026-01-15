@@ -34,7 +34,7 @@ class AuthServiceProvider extends ServiceProvider
         Passport::routes();
 
         // Default expiration: 60 minutes (Web)
-        $expireTime = now()->addMinutes(60);
+        $expireTime = now()->addMinutes(120);
         $refreshExpireTime = now()->addDays(7);
 
         // Conditional expiration for Mobile App
