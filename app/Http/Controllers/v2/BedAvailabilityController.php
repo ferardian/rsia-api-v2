@@ -22,7 +22,13 @@ class BedAvailabilityController extends Controller
                 ->select([
                     'aplicare_ketersediaan_kamar.*',
                     DB::raw("(SELECT MAX(k.kd_kamar) FROM kamar k WHERE k.kd_bangsal = aplicare_ketersediaan_kamar.kd_bangsal AND k.statusdata = '1') as kd_kamar"),
-                    DB::raw("(SELECT status FROM kamar k WHERE k.kd_bangsal = aplicare_ketersediaan_kamar.kd_bangsal AND k.statusdata = '1' ORDER BY k.kd_kamar DESC LIMIT 1) as status_kamar")
+                    DB::raw("(SELECT status FROM kamar k WHERE k.kd_bangsal = aplicare_ketersediaan_kamar.kd_bangsal AND k.statusdata = '1' ORDER BY k.kd_kamar DESC LIMIT 1) as status_kamar"),
+                    // Accurate status counts from kamar table
+                    DB::raw("(SELECT COUNT(*) FROM kamar k WHERE k.kd_bangsal = aplicare_ketersediaan_kamar.kd_bangsal AND k.kelas = aplicare_ketersediaan_kamar.kelas AND k.statusdata = '1') as real_kapasitas"),
+                    DB::raw("(SELECT COUNT(*) FROM kamar k WHERE k.kd_bangsal = aplicare_ketersediaan_kamar.kd_bangsal AND k.kelas = aplicare_ketersediaan_kamar.kelas AND k.status = 'KOSONG' AND k.statusdata = '1') as real_tersedia"),
+                    DB::raw("(SELECT COUNT(*) FROM kamar k WHERE k.kd_bangsal = aplicare_ketersediaan_kamar.kd_bangsal AND k.kelas = aplicare_ketersediaan_kamar.kelas AND k.status = 'ISI' AND k.statusdata = '1') as real_terisi"),
+                    DB::raw("(SELECT COUNT(*) FROM kamar k WHERE k.kd_bangsal = aplicare_ketersediaan_kamar.kd_bangsal AND k.kelas = aplicare_ketersediaan_kamar.kelas AND k.status = 'DIBERSIHKAN' AND k.statusdata = '1') as real_dibersihkan"),
+                    DB::raw("(SELECT COUNT(*) FROM kamar k WHERE k.kd_bangsal = aplicare_ketersediaan_kamar.kd_bangsal AND k.kelas = aplicare_ketersediaan_kamar.kelas AND k.status = 'DIBOOKING' AND k.statusdata = '1') as real_dibooking")
                 ])
                 ->with('bangsal');
 
@@ -40,33 +46,38 @@ class BedAvailabilityController extends Controller
                                  ->orderBy('kelas')
                                  ->get();
 
-            // Filter by status (post-query since status_kamar is from subquery)
-            if ($request->has('status')) {
-                $availability = $availability->filter(function($item) use ($request) {
-                    return $item->status_kamar === $request->status;
-                })->values();
-            }
-
             // Transform data to include calculated fields
-            $data = $availability->map(function($item) {
-                return [
+            $data = $availability->map(function($item) use ($request) {
+                $item_data = [
                     'kode_kelas_aplicare' => $item->kode_kelas_aplicare,
                     'kd_bangsal' => $item->kd_bangsal,
-                    'kd_kamar' => $item->kd_kamar ?? $item->kd_bangsal, // Use fetched kd_kamar or fallback
+                    'kd_kamar' => $item->kd_kamar ?? $item->kd_bangsal,
                     'nm_bangsal' => $item->bangsal->nm_bangsal ?? $item->kd_bangsal,
                     'kelas' => $item->kelas,
-                    'kapasitas' => $item->kapasitas,
-                    'tersedia' => $item->tersedia,
-                    'terisi' => $item->kapasitas - $item->tersedia,
-                    'tersediapria' => $item->tersediapria,
-                    'tersediawanita' => $item->tersediawanita,
-                    'tersediapriawanita' => $item->tersediapriawanita,
-                    'status_kamar' => $item->status_kamar, // New field from subquery
-                    'persentase_terisi' => $item->kapasitas > 0 
-                        ? round((($item->kapasitas - $item->tersedia) / $item->kapasitas) * 100, 1)
+                    'kapasitas' => (int)$item->real_kapasitas,
+                    'tersedia' => (int)$item->real_tersedia,
+                    'terisi' => (int)$item->real_terisi,
+                    'dibersihkan' => (int)$item->real_dibersihkan,
+                    'dibooking' => (int)$item->real_dibooking,
+                    'status_kamar' => $item->status_kamar,
+                    'persentase_terisi' => $item->real_kapasitas > 0 
+                        ? round(($item->real_terisi / $item->real_kapasitas) * 100, 1)
                         : 0
                 ];
+                return $item_data;
             });
+
+            // Filter by status on the calculated fields if requested
+            if ($request->has('status') && !empty($request->status)) {
+                $status = $request->status;
+                $data = $data->filter(function($item) use ($status) {
+                    if ($status === 'KOSONG') return $item['tersedia'] > 0;
+                    if ($status === 'ISI') return $item['terisi'] > 0;
+                    if ($status === 'DIBERSIHKAN') return $item['dibersihkan'] > 0;
+                    if ($status === 'DIBOOKING') return $item['dibooking'] > 0;
+                    return true;
+                })->values();
+            }
 
             return response()->json([
                 'success' => true,

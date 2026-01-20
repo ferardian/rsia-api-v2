@@ -105,10 +105,23 @@ class MonitoringIndikatorMutuController extends Controller
 
     public function getUnits()
     {
-        // Get distinct departments from active indicators
-        $units = RsiaMasterInmut::select('dep_id', 'nama_ruang')
-            ->where('status', '1')
-            ->distinct()
+        // Get units from indicators with COALESCE for name
+        $query1 = DB::table('rsia_master_inmut as m')
+            ->select(
+                'm.dep_id', 
+                DB::raw('COALESCE(k.nama, d.nama, m.nama_ruang) as nama_ruang')
+            )
+            ->leftJoin('departemen as d', 'd.dep_id', '=', 'm.dep_id')
+            ->leftJoin('rsia_komite as k', 'k.dep_id', '=', 'm.dep_id')
+            ->where('m.status', '1');
+
+        // Get units from active committees
+        $query2 = DB::table('rsia_komite as k')
+            ->select('k.dep_id', 'k.nama as nama_ruang')
+            ->where('k.status', 1)
+            ->whereNotNull('k.dep_id');
+
+        $units = $query1->union($query2)
             ->orderBy('nama_ruang')
             ->get();
 

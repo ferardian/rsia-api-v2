@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\v2\JadwalPegawaiController;
 use App\Http\Controllers\v2\PegawaiController;
 use App\Http\Controllers\v2\JadwalTambahanController;
+use App\Http\Controllers\v2\ScheduleGeneratorController;
 
 Route::middleware(['auth:aes', 'claim:role,pegawai|dokter|IT|admin|direksi'])->prefix('sdi')->group(function () {
     // Jadwal Pegawai Routes
@@ -13,6 +14,8 @@ Route::middleware(['auth:aes', 'claim:role,pegawai|dokter|IT|admin|direksi'])->p
     Route::post('jadwal-pegawai/approve', [JadwalPegawaiController::class, 'approve']);
     Route::post('jadwal-pegawai/approve', [JadwalPegawaiController::class, 'approve']);
     Route::get('shifts', [JadwalPegawaiController::class, 'getShifts']);
+    Route::post('jadwal-pegawai/generate', [ScheduleGeneratorController::class, 'generate']);
+
 
     // Jadwal Tambahan Routes
     Route::get('jadwal-tambahan', [JadwalTambahanController::class, 'index']);
@@ -31,4 +34,18 @@ Route::get('pegawai/list', [PegawaiController::class, 'list']); // Simplified li
     Route::post('kualifikasi-staf', [\App\Http\Controllers\v2\KualifikasiStafController::class, 'store']);
     Route::put('kualifikasi-staf/{nik}', [\App\Http\Controllers\v2\KualifikasiStafController::class, 'update']);
     Route::delete('kualifikasi-staf/{nik}', [\App\Http\Controllers\v2\KualifikasiStafController::class, 'destroy']);
+
+    // Unit Shift Rules (Orion REST API)
+    Orion::resource('unit-shift-rules', \App\Http\Controllers\Orion\RsiaUnitShiftRuleController::class);
+    
+    Route::get('departemen/next-id', [\App\Http\Controllers\Orion\DepartemenController::class, 'generateNextId']);
+    Orion::resource('departemen', \App\Http\Controllers\Orion\DepartemenController::class);
+
+    // Committee Routes
+    Route::get('committees', [\App\Http\Controllers\v2\CommitteeController::class, 'index']);
+    Route::get('committees/anggota', [\App\Http\Controllers\v2\CommitteeController::class, 'indexMembers']);
+    Route::get('committees/pegawai/{nik}', [\App\Http\Controllers\v2\CommitteeController::class, 'getByNik']);
+    Route::post('committees/anggota', [\App\Http\Controllers\v2\CommitteeController::class, 'store']);
+    Route::put('committees/anggota/{id}', [\App\Http\Controllers\v2\CommitteeController::class, 'update']);
+    Route::delete('committees/anggota/{id}', [\App\Http\Controllers\v2\CommitteeController::class, 'destroy']);
 });

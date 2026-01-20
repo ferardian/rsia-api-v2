@@ -21,6 +21,28 @@ class DepartemenController extends \Orion\Http\Controllers\Controller
         return \Illuminate\Support\Facades\Auth::user();
     }
 
+    public function generateNextId()
+    {
+        $lastId = Departemen::where('dep_id', 'like', 'DM%')
+            ->orderByRaw('CAST(SUBSTRING(dep_id, 3) AS UNSIGNED) DESC')
+            ->first()?->dep_id;
+
+        if (!$lastId) {
+            return response()->json([
+                'status' => 'success',
+                'data' => 'DM01'
+            ]);
+        }
+
+        $number = (int) substr($lastId, 2);
+        $nextId = 'DM' . str_pad($number + 1, 2, '0', STR_PAD_LEFT);
+
+        return response()->json([
+            'status' => 'success',
+            'data' => $nextId
+        ]);
+    }
+
     /**
      * The attributes that are used for filtering.
      *
