@@ -32,4 +32,9 @@ class RsiaHelpdeskTempLog extends Model
     {
         return $this->belongsTo(Pegawai::class, 'nik_pelapor', 'nik');
     }
+
+    public function departemen()
+    {
+        return $this->belongsTo(Departemen::class, 'kd_dep', 'dep_id');
+    }
 }

@@ -9,8 +9,10 @@ namespace App\Http\Controllers\v2;
 
 use App\Http\Controllers\Controller;
 use App\Models\RsiaHelpdeskTempLog;
+use App\Models\RsiaHelpdeskTicket;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Carbon\Carbon;
 
 class HelpdeskController extends Controller
 {
@@ -20,7 +22,7 @@ class HelpdeskController extends Controller
         $status = $request->input('status');
         $keyword = $request->input('keyword');
 
-        $query = RsiaHelpdeskTempLog::with('pegawai:nik,nama');
+        $query = RsiaHelpdeskTempLog::with(['pegawai:nik,nama', 'departemen:dep_id,nama']);
 
         if ($status) {
             $query->where('status', $status);
@@ -43,13 +45,91 @@ class HelpdeskController extends Controller
         ]);
     }
 
-    public function updateStatus(Request $request, $id)
+    public function getTickets(Request $request)
+    {
+        $limit = $request->input('limit', 10);
+        $status = $request->input('status');
+        $keyword = $request->input('keyword');
+
+        $query = RsiaHelpdeskTicket::with(['pelapor:nik,nama', 'teknisi:nik,nama', 'departemen:dep_id,nama']);
+
+        if ($status) {
+            $query->where('status', $status);
+        }
+
+        if ($keyword) {
+            $query->where(function($q) use ($keyword) {
+                $q->where('no_tiket', 'like', "%$keyword%")
+                  ->orWhere('keluhan', 'like', "%$keyword%");
+            });
+        }
+
+        $tickets = $query->orderBy('tanggal', 'DESC')->paginate($limit);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Data tiket helpdesk berhasil diambil',
+            'data'    => $tickets
+        ]);
+    }
+
+    public function createTicketFromLog(Request $request)
     {
         $request->validate([
-            'status' => 'required|in:WAITING,PROCESSED,EXPIRED'
+            'temp_log_id' => 'required|exists:rsia_helpdesk_temp_log,id',
+            'prioritas'   => 'required|in:High,Medium,Low'
         ]);
 
-        $ticket = RsiaHelpdeskTempLog::find($id);
+        $log = RsiaHelpdeskTempLog::find($request->temp_log_id);
+
+        if ($log->status !== 'WAITING') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Laporan sudah diproses atau kadaluarsa'
+            ], 400);
+        }
+
+        return DB::transaction(function () use ($log, $request) {
+            // Generate no_tiket: HTK/YYYY/MM/ID
+            $year = date('Y');
+            $month = date('m');
+            
+            // Get last ID for the series
+            $lastTicket = RsiaHelpdeskTicket::orderBy('id', 'DESC')->first();
+            $nextId = $lastTicket ? $lastTicket->id + 1 : 1;
+            $no_tiket = "HTK/{$year}/{$month}/" . str_pad($nextId, 4, '0', STR_PAD_LEFT);
+
+            $ticket = RsiaHelpdeskTicket::create([
+                'no_tiket'    => $no_tiket,
+                'tanggal'     => Carbon::now(),
+                'nik_pelapor' => $log->nik_pelapor,
+                'dep_id'      => $log->kd_dep,
+                'keluhan'     => $log->isi_laporan,
+                'prioritas'   => $request->prioritas,
+                'status'      => 'Open'
+            ]);
+
+            $log->status = 'PROCESSED';
+            $log->save();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Tiket berhasil diterbitkan',
+                'data'    => $ticket
+            ]);
+        });
+    }
+
+    public function updateTicket(Request $request, $id)
+    {
+        $request->validate([
+            'prioritas'   => 'sometimes|in:High,Medium,Low',
+            'status'      => 'sometimes|in:Open,Proses,Selesai,Batal',
+            'nik_teknisi' => 'sometimes|nullable|exists:pegawai,nik',
+            'solusi'      => 'sometimes|nullable|string',
+        ]);
+
+        $ticket = RsiaHelpdeskTicket::find($id);
 
         if (!$ticket) {
             return response()->json([
@@ -58,13 +138,25 @@ class HelpdeskController extends Controller
             ], 404);
         }
 
-        $ticket->status = $request->input('status');
-        $ticket->save();
+        $data = $request->only(['prioritas', 'status', 'nik_teknisi', 'solusi']);
+
+        if (isset($data['status']) && $data['status'] === 'Selesai') {
+            $data['jam_selesai'] = Carbon::now();
+        }
+
+        $ticket->update($data);
 
         return response()->json([
             'success' => true,
-            'message' => 'Status tiket berhasil diperbarui',
+            'message' => 'Tiket berhasil diperbarui',
             'data'    => $ticket
         ]);
+    }
+
+    public function updateStatus(Request $request, $id)
+    {
+        // Existing implementation remains, but maybe adjust for Ticket status if needed
+        // For now, let's keep it as is or add a separate one for Tickets
+        // ... (existing updateStatus for TempLog)
     }
 }

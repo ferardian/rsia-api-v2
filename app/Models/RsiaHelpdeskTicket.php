@@ -1,0 +1,45 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+
+class RsiaHelpdeskTicket extends Model
+{
+    protected $table = 'rsia_helpdesk_tickets';
+    protected $primaryKey = 'id';
+    public $timestamps = false; // Using database default for created_at (tanggal)
+
+    protected $fillable = [
+        'no_tiket',
+        'tanggal',
+        'nik_pelapor',
+        'dep_id',
+        'keluhan',
+        'prioritas',
+        'status',
+        'nik_teknisi',
+        'solusi',
+        'jam_selesai'
+    ];
+
+    protected $casts = [
+        'tanggal' => 'datetime',
+        'jam_selesai' => 'datetime',
+    ];
+
+    public function pelapor()
+    {
+        return $this->belongsTo(Pegawai::class, 'nik_pelapor', 'nik');
+    }
+
+    public function teknisi()
+    {
+        return $this->belongsTo(Pegawai::class, 'nik_teknisi', 'nik');
+    }
+
+    public function departemen()
+    {
+        return $this->belongsTo(Departemen::class, 'dep_id', 'dep_id');
+    }
+}

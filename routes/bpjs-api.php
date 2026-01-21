@@ -28,4 +28,13 @@ Route::group(['middleware' => ['auth:aes']], function () {
 
     // Route untuk mendapatkan response BPJS
     Route::get('/bpjs/erm/{noSep}/response', [\App\Http\Controllers\v2\BpjsController::class, 'getBpjsResponse']);
+
+    // BPJS Antrol (Antrian Online)
+    Route::get('/bpjs/antrol/pendaftaran/tanggal/{tanggal}', [\App\Http\Controllers\v2\BpjsAntrolController::class, 'getPendaftaranByTanggal']);
+    Route::get('/bpjs/antrol/dashboard', [\App\Http\Controllers\v2\BpjsAntrolController::class, 'getDashboardByTanggal']);
+    Route::post('/bpjs/antrol/antrean/getlisttask', [\App\Http\Controllers\v2\BpjsAntrolController::class, 'getListTask']);
+    Route::post('/bpjs/antrol/antrean/sync', [\App\Http\Controllers\v2\BpjsAntrolController::class, 'syncTask']);
+    Route::post('/bpjs/antrol/antrean/local-data', [\App\Http\Controllers\v2\BpjsAntrolController::class, 'getLocalData']);
+    Route::post('/bpjs/antrol/antrean/update-local', [\App\Http\Controllers\v2\BpjsAntrolController::class, 'updateLocalTask']);
+    Route::get('/bpjs/antrol/sep/count/{tanggal}', [\App\Http\Controllers\v2\BpjsAntrolController::class, 'getSepCount']);
 });
