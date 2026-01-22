@@ -16,7 +16,8 @@ class RiwayatObatController extends Controller
 
         // Filter by Date
         if ($request->has('tgl_awal') && $request->has('tgl_akhir')) {
-            $query->whereBetween('tanggal', [$request->tgl_awal, $request->tgl_akhir]);
+            $query->whereDate('tanggal', '>=', $request->tgl_awal)
+                  ->whereDate('tanggal', '<=', $request->tgl_akhir);
         } else {
              // Default to today if no date provided? Or allow all? 
              // Usually best to limit to this month or today to avoid huge load.
@@ -93,11 +94,38 @@ class RiwayatObatController extends Controller
         $selectRawParts = ['riwayat_barang_medis.kode_brng'];
         
         foreach ($requestedPosisi as $posisi) {
-            // sanitize literal string for SQL just in case, though usually bounded by enum
-            // We use SUM(CASE WHEN posisi = ? THEN (masuk + keluar) ELSE 0 END) as 'alias'
-            // This covers both IN (Penerimaan) and OUT (Pemberian) transactions for specific columns.
             $alias = \Str::slug($posisi, '_');
-            $selectRawParts[] = "COALESCE(SUM(CASE WHEN posisi = '{$posisi}' THEN (masuk + keluar) ELSE 0 END), 0) as `{$alias}`";
+            
+            // Define Direction Logic
+            // Outbound (Consumption/Exit): Show Net Keluar (Keluar - Masuk)
+            $outbound = [
+                'Pemberian Obat', 'Penjualan', 'Resep Pulang', 'Piutang', 'Retur Beli', 
+                'Stok Pasien Ranap', 'Pengambilan Medis', 'Stok Keluar', 'Hibah'
+            ];
+            
+            // Inbound (Entry/Return from User): Show Net Masuk (Masuk - Keluar)
+            $inbound = [
+                'Pengadaan', 'Penerimaan', 'Retur Jual', 'Retur Piutang', 'Retur Pasien'
+            ];
+
+            // Mutasi & Opname: Usually we want to see the "Activity" or specific flow. 
+            // For Mutasi: If we want "Total Moved", maybe SUM(Keluar)? 
+            // For now, let's keep specific logic:
+            if (in_array($posisi, $outbound)) {
+                // For Outbound, we want (Keluar - Masuk) to capture Net Usage.
+                $formula = "SUM(keluar - masuk)";
+            } elseif (in_array($posisi, $inbound)) {
+                 // For Inbound, we want (Masuk - Keluar) to capture Net Entry.
+                $formula = "SUM(masuk - keluar)";
+            } else {
+                // Mutasi, Opname, etc: Fallback to Total Activity (Gross) or just Masuk?
+                // Let's use Masuk + Keluar for now to show Total Activity magnitude, 
+                // UNLESS user complains Mutasi is double.
+                // Actually for Opname, absolute variance is useful.
+                $formula = "SUM(masuk + keluar)";
+            }
+
+            $selectRawParts[] = "COALESCE({$formula}, 0) as `{$alias}`";
         }
 
         // STRATEGY: Hybrid Approach (Transaction-First vs Master-First)
@@ -135,7 +163,8 @@ class RiwayatObatController extends Controller
         // 2. Filter Active History (EXISTS)
         $query->whereHas('riwayat', function($q) use ($requestedPosisi, $request) {
             if ($request->has('tgl_awal') && $request->has('tgl_akhir')) {
-               $q->whereBetween('tanggal', [$request->tgl_awal, $request->tgl_akhir]);
+               $q->whereDate('tanggal', '>=', $request->tgl_awal)
+                 ->whereDate('tanggal', '<=', $request->tgl_akhir);
             }
             if (!empty($requestedPosisi)) {
                 $q->whereIn('posisi', $requestedPosisi);
@@ -155,10 +184,10 @@ class RiwayatObatController extends Controller
         $itemCodes = $data->pluck('kode_brng')->toArray();
 
         if (!empty($itemCodes)) {
-            $aggregates = \App\Models\RiwayatBarangMedis::selectRaw('kode_brng, posisi, SUM(masuk + keluar) as total_qty')
+            $aggregates = \App\Models\RiwayatBarangMedis::selectRaw('kode_brng, posisi, SUM(masuk) as masuk, SUM(keluar) as keluar')
                 ->whereIn('kode_brng', $itemCodes)
                 ->whereIn('posisi', $requestedPosisi)
-                ->when($request->has('tgl_awal'), fn($q) => $q->whereBetween('tanggal', [$request->tgl_awal, $request->tgl_akhir]))
+                ->when($request->has('tgl_awal'), fn($q) => $q->whereDate('tanggal', '>=', $request->tgl_awal)->whereDate('tanggal', '<=', $request->tgl_akhir))
                 ->when($request->has('kd_bangsal') && !empty($request->kd_bangsal), fn($q) => $q->where('kd_bangsal', $request->kd_bangsal))
                 ->groupBy('kode_brng', 'posisi')
                 ->get()
@@ -173,8 +202,26 @@ class RiwayatObatController extends Controller
                 $totalSelected = 0;
                 foreach ($requestedPosisi as $posisi) {
                     $alias = \Str::slug($posisi, '_');
-                    $stat = $itemStats->firstWhere('posisi', $posisi);
-                    $qty = $stat ? $stat->total_qty : 0;
+                    $stat = $itemStats->where('posisi', $posisi);
+
+                    $qty = 0;
+                     // Define Direction Logic (Match SQL above)
+                    $outbound = [
+                        'Pemberian Obat', 'Penjualan', 'Resep Pulang', 'Piutang', 'Retur Beli', 
+                        'Stok Pasien Ranap', 'Pengambilan Medis', 'Stok Keluar', 'Hibah'
+                    ];
+                    $inbound = [
+                        'Pengadaan', 'Penerimaan', 'Retur Jual', 'Retur Piutang', 'Retur Pasien'
+                    ];
+
+                    if (in_array($posisi, $outbound)) {
+                        $qty = $stat->sum(function($row) { return $row->keluar - $row->masuk; });
+                    } elseif (in_array($posisi, $inbound)) {
+                        $qty = $stat->sum(function($row) { return $row->masuk - $row->keluar; });
+                    } else {
+                        // Mutasi/Opname default
+                        $qty = $stat->sum(function($row) { return $row->masuk + $row->keluar; });
+                    }
                     
                     $item->setAttribute($alias, $qty);
                     $totalSelected += $qty;
@@ -252,10 +299,10 @@ class RiwayatObatController extends Controller
                     ->keyBy('kode_brng');
 
                  // 2. Fetch Aggregates
-                 $aggregates = \App\Models\RiwayatBarangMedis::selectRaw('kode_brng, posisi, SUM(masuk + keluar) as total_qty')
+                 $aggregates = \App\Models\RiwayatBarangMedis::selectRaw('kode_brng, posisi, SUM(masuk) as masuk, SUM(keluar) as keluar')
                     ->whereIn('kode_brng', $itemCodes)
                     ->whereIn('posisi', $requestedPosisi)
-                    ->when($request->has('tgl_awal'), fn($q) => $q->whereBetween('tanggal', [$request->tgl_awal, $request->tgl_akhir]))
+                    ->when($request->has('tgl_awal'), fn($q) => $q->whereDate('tanggal', '>=', $request->tgl_awal)->whereDate('tanggal', '<=', $request->tgl_akhir))
                     ->when($request->has('kd_bangsal') && !empty($request->kd_bangsal), fn($q) => $q->where('kd_bangsal', $request->kd_bangsal))
                     ->groupBy('kode_brng', 'posisi')
                     ->get()
@@ -276,8 +323,26 @@ class RiwayatObatController extends Controller
 
                      $totalSelected = 0;
                      foreach ($requestedPosisi as $posisi) {
-                         $stat = $itemStats->firstWhere('posisi', $posisi);
-                         $qty = $stat ? $stat->total_qty : 0;
+                         $stat = $itemStats->where('posisi', $posisi);
+                         
+                         $qty = 0;
+                         // Define Direction Logic (Match SQL above)
+                        $outbound = [
+                            'Pemberian Obat', 'Penjualan', 'Resep Pulang', 'Piutang', 'Retur Beli', 
+                            'Stok Pasien Ranap', 'Pengambilan Medis', 'Stok Keluar', 'Hibah'
+                        ];
+                        $inbound = [
+                            'Pengadaan', 'Penerimaan', 'Retur Jual', 'Retur Piutang', 'Retur Pasien'
+                        ];
+
+                        if (in_array($posisi, $outbound)) {
+                            $qty = $stat->sum(function($row) { return $row->keluar - $row->masuk; });
+                        } elseif (in_array($posisi, $inbound)) {
+                            $qty = $stat->sum(function($row) { return $row->masuk - $row->keluar; });
+                        } else {
+                            $qty = $stat->sum(function($row) { return $row->masuk + $row->keluar; });
+                        }
+
                          $row[] = $qty; // Number
                          $totalSelected += $qty;
                      }
@@ -295,7 +360,8 @@ class RiwayatObatController extends Controller
                 ->select('kode_brng')
                 ->whereHas('riwayat', function($q) use ($requestedPosisi, $request) {
                     if ($request->has('tgl_awal') && $request->has('tgl_akhir')) {
-                       $q->whereBetween('tanggal', [$request->tgl_awal, $request->tgl_akhir]);
+                       $q->whereDate('tanggal', '>=', $request->tgl_awal)
+                         ->whereDate('tanggal', '<=', $request->tgl_akhir);
                     }
                     if (!empty($requestedPosisi)) {
                         $q->whereIn('posisi', $requestedPosisi);
