@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Route;
 Route::middleware(['auth:aes', 'claim:role,pegawai|dokter'])->group(function () {
     // Dashboard Statistics
     Route::get('dashboard/stats', [\App\Http\Controllers\v2\DashboardController::class, 'getStats'])->name('dashboard.stats');
+    Route::get('dashboard/visits', [\App\Http\Controllers\v2\DashboardController::class, 'getVisitStats'])->name('dashboard.visits');
     
     // Code Blue Schedule
     Route::get('dashboard/codeblue', [\App\Http\Controllers\v2\DashboardController::class, 'getCodeBlueSchedule'])->name('dashboard.codeblue');

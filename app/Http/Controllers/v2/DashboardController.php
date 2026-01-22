@@ -695,4 +695,116 @@ class DashboardController extends Controller
             return ApiResponse::error('Failed to delete code blue schedule', 'internal_server_error', null, 500);
         }
     }
+
+    /**
+     * Get visit statistics
+     * 
+     * @param \Illuminate\Http\Request $request
+     * @return \Illuminate\Http\Response
+     */
+    public function getVisitStats(Request $request)
+    {
+        try {
+            $tgl_awal = $request->tgl_awal ?? Carbon::today()->toDateString();
+            $tgl_akhir = $request->tgl_akhir ?? Carbon::today()->toDateString();
+            $status_lanjut = $request->status_lanjut; // 'Ralan', 'Ranap', or null for all
+
+            $baseQuery = RegPeriksa::whereBetween('tgl_registrasi', [$tgl_awal, $tgl_akhir]);
+            
+            if ($status_lanjut && $status_lanjut !== 'all') {
+                $baseQuery->where('reg_periksa.status_lanjut', $status_lanjut);
+            }
+
+            // Tambahkan filter untuk mengecualikan status 'Batal'
+            $baseQuery->where('reg_periksa.stts', '!=', 'Batal');
+
+            // 1. Baru vs Lama & Gender
+            $registrasi = (clone $baseQuery)
+                ->join('pasien', 'reg_periksa.no_rkm_medis', '=', 'pasien.no_rkm_medis')
+                ->selectRaw("
+                    reg_periksa.stts_daftar,
+                    pasien.jk,
+                    COUNT(*) as total
+                ")
+                ->groupBy('reg_periksa.stts_daftar', 'pasien.jk')
+                ->get();
+
+            // 2. Berdasarkan Cara Bayar
+            $caraBayar = (clone $baseQuery)
+                ->join('penjab', 'reg_periksa.kd_pj', '=', 'penjab.kd_pj')
+                ->select('penjab.png_jawab as label', DB::raw('COUNT(*) as total'))
+                ->groupBy('penjab.png_jawab')
+                ->orderBy('total', 'desc')
+                ->get();
+
+            // 3. Berdasarkan Poli
+            $poli = (clone $baseQuery)
+                ->join('poliklinik', 'reg_periksa.kd_poli', '=', 'poliklinik.kd_poli')
+                ->select('poliklinik.nm_poli as label', DB::raw('COUNT(*) as total'))
+                ->groupBy('poliklinik.nm_poli')
+                ->orderBy('total', 'desc')
+                ->get();
+
+            // 4. Berdasarkan Dokter
+            $dokter = (clone $baseQuery)
+                ->join('dokter', 'reg_periksa.kd_dokter', '=', 'dokter.kd_dokter')
+                ->select('dokter.nm_dokter as label', DB::raw('COUNT(*) as total'))
+                ->groupBy('dokter.nm_dokter')
+                ->orderBy('total', 'desc')
+                ->limit(10) // Only top 10
+                ->get();
+
+            // 5. Keseluruhan Pasien (Hidup + Proses) - Berdasarkan ralat user
+            $pasienKeluar = (clone $baseQuery)
+                ->join('pasien', 'reg_periksa.no_rkm_medis', '=', 'pasien.no_rkm_medis')
+                ->selectRaw("pasien.jk, COUNT(*) as total")
+                ->groupBy('pasien.jk')
+                ->get();
+
+            // 6. Keluar Mati (Tetap merujuk ke tabel pasien_mati)
+            $keluarMati = (clone $baseQuery)
+                ->join('pasien', 'reg_periksa.no_rkm_medis', '=', 'pasien.no_rkm_medis')
+                ->join('pasien_mati', 'reg_periksa.no_rkm_medis', '=', 'pasien_mati.no_rkm_medis')
+                ->selectRaw("pasien.jk, COUNT(DISTINCT reg_periksa.no_rkm_medis) as total")
+                ->groupBy('pasien.jk')
+                ->get();
+
+            // 6.b Keluar Mati >= 48 Jam
+            $keluarMati48 = (clone $baseQuery)
+                ->join('pasien', 'reg_periksa.no_rkm_medis', '=', 'pasien.no_rkm_medis')
+                ->join('pasien_mati', 'reg_periksa.no_rkm_medis', '=', 'pasien_mati.no_rkm_medis')
+                ->whereRaw("TIMESTAMPDIFF(HOUR, CONCAT(reg_periksa.tgl_registrasi, ' ', reg_periksa.jam_reg), CONCAT(pasien_mati.tanggal, ' ', pasien_mati.jam)) >= 48")
+                ->selectRaw("pasien.jk, COUNT(DISTINCT reg_periksa.no_rkm_medis) as total")
+                ->groupBy('pasien.jk')
+                ->get();
+
+            $data = [
+                'registrasi' => $registrasi,
+                'cara_bayar' => $caraBayar,
+                'poli' => $poli,
+                'dokter' => $dokter,
+                'summary' => [
+                    'total' => $baseQuery->count(),
+                    'baru' => $registrasi->where('stts_daftar', 'Baru')->sum('total'),
+                    'lama' => $registrasi->where('stts_daftar', 'Lama')->sum('total'),
+                    'pria' => $registrasi->where('jk', 'L')->sum('total'),
+                    'wanita' => $registrasi->where('jk', 'P')->sum('total'),
+                    // Summary Keluar (Disatukan: Hidup + Mati + Proses)
+                    'keluar_l' => $pasienKeluar->where('jk', 'L')->sum('total'),
+                    'keluar_p' => $pasienKeluar->where('jk', 'P')->sum('total'),
+                    // Summary Mati (Tetap dipisah sebagai subset)
+                    'mati_l' => $keluarMati->where('jk', 'L')->sum('total'),
+                    'mati_p' => $keluarMati->where('jk', 'P')->sum('total'),
+                    // Summary Mati >= 48 Jam
+                    'mati_48_l' => $keluarMati48->where('jk', 'L')->sum('total'),
+                    'mati_48_p' => $keluarMati48->where('jk', 'P')->sum('total'),
+                ]
+            ];
+
+            return ApiResponse::success('Visit statistics retrieved successfully', $data);
+        } catch (\Exception $e) {
+            \Log::error('Dashboard Visit Stats Error: ' . $e->getMessage());
+            return ApiResponse::error('Failed to retrieve visit statistics: ' . $e->getMessage(), 'internal_server_error', null, 500);
+        }
+    }
 }
