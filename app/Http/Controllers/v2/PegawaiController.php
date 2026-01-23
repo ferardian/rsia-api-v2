@@ -925,7 +925,7 @@ class PegawaiController extends Controller
             });
         });
 
-        $limit = (int) $request->input('limit', 100);
+        $limit = (int) $request->input('limit', 500);
         $data = $query->limit($limit)->get();
 
         $data->transform(function($item) {

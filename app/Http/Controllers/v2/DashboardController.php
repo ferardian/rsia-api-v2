@@ -801,6 +801,44 @@ class DashboardController extends Controller
                 ]
             ];
 
+            // Add inpatient care duration statistics if status is Ranap
+            if ($status_lanjut === 'Ranap') {
+                // User DO:
+                // Hari Perawatan = tanggal keluar - tanggal masuk + 1 (contoh: 5-10 = 6 hari)
+                // Lama Dirawat = tanggal keluar - tanggal masuk (contoh: 5-10 = 5 hari)
+                
+                $subQuery = DB::table('kamar_inap as ki')
+                    ->join('reg_periksa as reg', 'ki.no_rawat', '=', 'reg.no_rawat')
+                    ->whereBetween('reg.tgl_registrasi', [$tgl_awal, $tgl_akhir])
+                    ->where('reg.stts', '!=', 'Batal')
+                    ->whereNotNull('ki.tgl_keluar')
+                    // Pastikan pasien sudah benar-benar pulang (bukan status pindah di record terakhirnya)
+                    ->whereIn('ki.no_rawat', function($q) {
+                        $q->select('no_rawat')
+                          ->from('kamar_inap')
+                          ->whereNotIn('stts_pulang', ['Pindah Kamar', '-', '']);
+                    })
+                    ->selectRaw('DATEDIFF(MAX(ki.tgl_keluar), MIN(ki.tgl_masuk)) as los')
+                    ->groupBy('ki.no_rawat');
+
+                $careDuration = DB::table(DB::raw("({$subQuery->toSql()}) as sub"))
+                    ->mergeBindings($subQuery)
+                    ->selectRaw('
+                        SUM(los + 1) as total_hp,
+                        SUM(los) as total_ld,
+                        COUNT(*) as total_pasien,
+                        AVG(los) as alos
+                    ')
+                    ->first();
+
+                $data['inpatient_care'] = [
+                    'hari_perawatan' => (int) ($careDuration->total_hp ?? 0),
+                    'lama_dirawat' => (int) ($careDuration->total_ld ?? 0),
+                    'total_pasien' => (int) ($careDuration->total_pasien ?? 0),
+                    'avg_lama_dirawat' => round($careDuration->alos ?? 0, 1)
+                ];
+            }
+
             return ApiResponse::success('Visit statistics retrieved successfully', $data);
         } catch (\Exception $e) {
             \Log::error('Dashboard Visit Stats Error: ' . $e->getMessage());

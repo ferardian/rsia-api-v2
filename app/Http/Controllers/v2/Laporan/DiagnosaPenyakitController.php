@@ -28,10 +28,13 @@ class DiagnosaPenyakitController extends Controller
                 'dp.kd_penyakit', 
                 'p.nm_penyakit', 
                 DB::raw('COUNT(*) as total'),
+                DB::raw('SUM(CASE WHEN pas.jk = "L" THEN 1 ELSE 0 END) as total_l'),
+                DB::raw('SUM(CASE WHEN pas.jk = "P" THEN 1 ELSE 0 END) as total_p'),
                 DB::raw('COUNT(DISTINCT pm.no_rkm_medis) as total_mati')
             )
             ->whereBetween('reg.tgl_registrasi', [$awal, $akhir])
-            ->where('reg.stts', '!=', 'Batal');
+            ->where('reg.stts', '!=', 'Batal')
+            ->where('dp.prioritas', 1); // Only primary diagnosis
 
         // Exclude Z, R, O80, O82
         $query->where(function($q) {
@@ -84,7 +87,8 @@ class DiagnosaPenyakitController extends Controller
             ->join('reg_periksa as reg', 'dp.no_rawat', '=', 'reg.no_rawat')
             ->join('pasien as pas', 'reg.no_rkm_medis', '=', 'pas.no_rkm_medis')
             ->whereBetween('reg.tgl_registrasi', [$awal, $akhir])
-            ->where('reg.stts', '!=', 'Batal');
+            ->where('reg.stts', '!=', 'Batal')
+            ->where('dp.prioritas', 1); // Only primary diagnosis
 
         if ($status != 'all') {
             $baseQuery->where('dp.status', $status);
@@ -126,6 +130,124 @@ class DiagnosaPenyakitController extends Controller
                 'total_filtered' => $totalDiagnosa - $totalExcluded,
                 'total_mati' => $totalMati
             ]
+        ]);
+    }
+
+    public function getDeathDetails(Request $request)
+    {
+        $kd_penyakit = $request->query('kd_penyakit');
+        $awal = $request->query('tgl_awal', date('Y-m-d'));
+        $akhir = $request->query('tgl_akhir', date('Y-m-d'));
+        $status = $request->query('status', 'all');
+        $stts_daftar = $request->query('stts_daftar', 'all');
+        $jk = $request->query('jk', 'all');
+
+        if (!$kd_penyakit) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Kode penyakit harus diisi'
+            ], 400);
+        }
+
+        $query = DB::table('diagnosa_pasien as dp')
+            ->join('reg_periksa as reg', 'dp.no_rawat', '=', 'reg.no_rawat')
+            ->join('pasien as pas', 'reg.no_rkm_medis', '=', 'pas.no_rkm_medis')
+            ->join('pasien_mati as pm', function($join) {
+                $join->on('pas.no_rkm_medis', '=', 'pm.no_rkm_medis')
+                     ->whereColumn('pm.tanggal', '>=', 'reg.tgl_registrasi');
+            })
+            ->where('dp.kd_penyakit', $kd_penyakit)
+            ->whereBetween('reg.tgl_registrasi', [$awal, $akhir])
+            ->where('reg.stts', '!=', 'Batal')
+            ->where('dp.prioritas', 1) // Only primary diagnosis
+            ->select(
+                'dp.no_rawat',
+                'pas.no_rkm_medis',
+                'pas.nm_pasien',
+                'pas.jk',
+                'reg.tgl_registrasi',
+                'pm.tanggal as tgl_meninggal',
+                'pm.jam as jam_meninggal',
+                'pm.keterangan'
+            );
+
+        if ($status != 'all') {
+            $query->where('dp.status', $status);
+        }
+
+        if ($stts_daftar != 'all') {
+            $query->where('reg.stts_daftar', $stts_daftar);
+        }
+
+        if ($jk != 'all') {
+            $query->where('pas.jk', $jk);
+        }
+
+        $data = $query->orderBy('pm.tanggal', 'desc')->get();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Data pasien meninggal berhasil diambil',
+            'data' => $data,
+            'total' => $data->count()
+        ]);
+    }
+
+    public function getDeadliestDiseases(Request $request)
+    {
+        $awal = $request->query('tgl_awal', date('Y-m-d'));
+        $akhir = $request->query('tgl_akhir', date('Y-m-d'));
+        $status = $request->query('status', 'all');
+        $stts_daftar = $request->query('stts_daftar', 'all');
+        $jk = $request->query('jk', 'all');
+
+        $query = DB::table('diagnosa_pasien as dp')
+            ->join('penyakit as p', 'dp.kd_penyakit', '=', 'p.kd_penyakit')
+            ->join('reg_periksa as reg', 'dp.no_rawat', '=', 'reg.no_rawat')
+            ->join('pasien as pas', 'reg.no_rkm_medis', '=', 'pas.no_rkm_medis')
+            ->join('pasien_mati as pm', function($join) {
+                $join->on('pas.no_rkm_medis', '=', 'pm.no_rkm_medis')
+                     ->whereColumn('pm.tanggal', '>=', 'reg.tgl_registrasi');
+            })
+            ->select(
+                'dp.kd_penyakit', 
+                'p.nm_penyakit', 
+                DB::raw('COUNT(DISTINCT pm.no_rkm_medis) as total_mati'),
+                DB::raw('COUNT(*) as total_kasus')
+            )
+            ->whereBetween('reg.tgl_registrasi', [$awal, $akhir])
+            ->where('reg.stts', '!=', 'Batal')
+            ->where('dp.prioritas', 1); // Only primary diagnosis
+
+        // Exclude Z, R, O80, O82
+        $query->where(function($q) {
+            $q->where('dp.kd_penyakit', 'not like', 'Z%')
+              ->where('dp.kd_penyakit', 'not like', 'R%')
+              ->where('dp.kd_penyakit', 'not like', 'O80%')
+              ->where('dp.kd_penyakit', 'not like', 'O82%');
+        });
+
+        if ($status != 'all') {
+            $query->where('dp.status', $status);
+        }
+
+        if ($stts_daftar != 'all') {
+            $query->where('reg.stts_daftar', $stts_daftar);
+        }
+
+        if ($jk != 'all') {
+            $query->where('pas.jk', $jk);
+        }
+
+        $data = $query->groupBy('dp.kd_penyakit', 'p.nm_penyakit')
+            ->orderBy('total_mati', 'desc')
+            ->limit(10)
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Data 10 penyakit dengan kematian terbanyak berhasil diambil',
+            'data' => $data
         ]);
     }
 }

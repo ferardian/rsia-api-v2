@@ -127,6 +127,7 @@ class HelpdeskController extends Controller
             'status'      => 'sometimes|in:Open,Proses,Selesai,Batal',
             'nik_teknisi' => 'sometimes|nullable|exists:pegawai,nik',
             'solusi'      => 'sometimes|nullable|string',
+            'jam_selesai' => 'sometimes|nullable|date',
         ]);
 
         $ticket = RsiaHelpdeskTicket::find($id);
@@ -138,9 +139,9 @@ class HelpdeskController extends Controller
             ], 404);
         }
 
-        $data = $request->only(['prioritas', 'status', 'nik_teknisi', 'solusi']);
+        $data = $request->only(['prioritas', 'status', 'nik_teknisi', 'solusi', 'jam_selesai']);
 
-        if (isset($data['status']) && $data['status'] === 'Selesai') {
+        if (isset($data['status']) && $data['status'] === 'Selesai' && empty($data['jam_selesai'])) {
             $data['jam_selesai'] = Carbon::now();
         }
 
