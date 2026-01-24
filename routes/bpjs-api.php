@@ -36,5 +36,6 @@ Route::group(['middleware' => ['auth:aes']], function () {
     Route::post('/bpjs/antrol/antrean/sync', [\App\Http\Controllers\v2\BpjsAntrolController::class, 'syncTask']);
     Route::post('/bpjs/antrol/antrean/local-data', [\App\Http\Controllers\v2\BpjsAntrolController::class, 'getLocalData']);
     Route::post('/bpjs/antrol/antrean/update-local', [\App\Http\Controllers\v2\BpjsAntrolController::class, 'updateLocalTask']);
+    Route::post('/bpjs/antrol/antrean/sync-queue', [\App\Http\Controllers\v2\BpjsAntrolController::class, 'syncTaskQueue']);
     Route::get('/bpjs/antrol/sep/count/{tanggal}', [\App\Http\Controllers\v2\BpjsAntrolController::class, 'getSepCount']);
 });

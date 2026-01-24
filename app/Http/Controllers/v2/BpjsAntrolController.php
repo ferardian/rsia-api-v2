@@ -283,19 +283,117 @@ class BpjsAntrolController extends Controller
         }
     }
 
+    public function syncTaskQueue(Request $request)
+    {
+        $kodebooking = $request->kodebooking;
+        
+        // Get registration data
+        $antrol = \App\Models\BpjsAntrol::where('kodebooking', $kodebooking)->first();
+        if (!$antrol) {
+            return response()->json(['metadata' => ['code' => 404, 'message' => 'Data antrean tidak ditemukan']]);
+        }
+
+        $no_rawat = $antrol->no_rawat;
+        
+        // Check if prescription exists
+        $hasResep = \App\Models\ResepObat::where('no_rawat', $no_rawat)->exists();
+        
+        try {
+            $results = [];
+            
+            // Task 3: Mulai Pemeriksaan
+            $task3 = \App\Models\PemeriksaanRalan::where('no_rawat', $no_rawat)->first();
+            if ($task3) {
+                $waktu3 = strtotime($task3->tgl_perawatan . ' ' . $task3->jam_rawat) * 1000;
+                $res3 = $this->antrolService->post("/antrean/updatewaktu", [
+                    'kodebooking' => $kodebooking,
+                    'taskid' => 3,
+                    'waktu' => $waktu3
+                ]);
+                $results['task3'] = $res3;
+            }
+            
+            // Task 4: Estimasi Selesai Pemeriksaan
+            $task4 = \Illuminate\Support\Facades\DB::table('rsia_estimasi_poli')->where('no_rawat', $no_rawat)->first();
+            if ($task4) {
+                $waktu4 = strtotime($task4->jam_periksa) * 1000;
+                $res4 = $this->antrolService->post("/antrean/updatewaktu", [
+                    'kodebooking' => $kodebooking,
+                    'taskid' => 4,
+                    'waktu' => $waktu4
+                ]);
+                $results['task4'] = $res4;
+            }
+            
+            // Task 5: Selesai Pemeriksaan / Peresepan
+            $task5Resep = \App\Models\ResepObat::where('no_rawat', $no_rawat)->first();
+            if ($task5Resep) {
+                $waktu5 = strtotime($task5Resep->tgl_peresepan . ' ' . $task5Resep->jam_peresepan) * 1000;
+            } else {
+                $task5Selesai = \Illuminate\Support\Facades\DB::table('rsia_selesai_poli')->where('no_rawat', $no_rawat)->first();
+                if ($task5Selesai) {
+                    $waktu5 = strtotime($task5Selesai->jam_periksa) * 1000;
+                }
+            }
+            if (isset($waktu5)) {
+                $res5 = $this->antrolService->post("/antrean/updatewaktu", [
+                    'kodebooking' => $kodebooking,
+                    'taskid' => 5,
+                    'waktu' => $waktu5
+                ]);
+                $results['task5'] = $res5;
+            }
+            
+            // Only sync tasks 6-7 if prescription exists
+            if ($hasResep) {
+                // Task 6: Racik Obat
+                $task6 = \App\Models\ResepObat::where('no_rawat', $no_rawat)->first();
+                if ($task6 && $task6->tgl_perawatan && $task6->jam) {
+                    $waktu6 = strtotime($task6->tgl_perawatan . ' ' . $task6->jam) * 1000;
+                    $res6 = $this->antrolService->post("/antrean/updatewaktu", [
+                        'kodebooking' => $kodebooking,
+                        'taskid' => 6,
+                        'waktu' => $waktu6
+                    ]);
+                    $results['task6'] = $res6;
+                }
+                
+                // Task 7: Serah Terima Obat
+                if ($task6 && $task6->tgl_penyerahan && $task6->jam_penyerahan) {
+                    $waktu7 = strtotime($task6->tgl_penyerahan . ' ' . $task6->jam_penyerahan) * 1000;
+                    $res7 = $this->antrolService->post("/antrean/updatewaktu", [
+                        'kodebooking' => $kodebooking,
+                        'taskid' => 7,
+                        'waktu' => $waktu7
+                    ]);
+                    $results['task7'] = $res7;
+                }
+            }
+            
+            return response()->json([
+                'metadata' => ['code' => 200, 'message' => 'Sinkronisasi task berhasil'],
+                'response' => $results
+            ]);
+            
+        } catch (\Exception $e) {
+            return response()->json(['metadata' => ['code' => 500, 'message' => $e->getMessage()]]);
+        }
+    }
+
     /**
-     * Get Outpatient SEP count (excluding IGD) for a given date
+     * Get Outpatient SEP list (excluding IGD) for a given date
      */
     public function getSepCount($tanggal)
     {
-        $count = \App\Models\BridgingSep::where('tglsep', $tanggal)
+        $seps = \App\Models\BridgingSep::where('tglsep', $tanggal)
             ->where('jnspelayanan', '2') // Rawat Jalan
             ->where('kdpolitujuan', '<>', 'IGD')
-            ->count();
+            ->select('no_kartu', 'nama_pasien', 'no_sep', 'no_rawat')
+            ->get();
 
         return response()->json([
             'metadata' => ['code' => 200, 'message' => 'OK'],
-            'response' => $count
+            'response' => $seps
         ]);
     }
 }
