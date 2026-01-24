@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\v2\PegawaiController;
+use App\Http\Controllers\v2\LegacyUserController;
 
 // User Management Routes
 Route::middleware(['auth:aes'])->prefix('user-management')->group(function () {
@@ -36,5 +37,11 @@ Route::middleware(['auth:aes'])->prefix('user-management')->group(function () {
         Route::delete('/{nip}/role/{roleId}', [PegawaiController::class, 'removeRole']);
         Route::get('/statistics', [PegawaiController::class, 'getStatistics']);
     });
+
+    // Legacy User (sikrsia.user table) Routes
+    Route::get('legacy-users', [LegacyUserController::class, 'index']);
+    Route::post('legacy-users/{id_user}/set-password', [LegacyUserController::class, 'setPassword']);
+    Route::get('legacy-users/{id_user}/check', [LegacyUserController::class, 'checkUser']);
+    Route::get('legacy-users/{id_user}/password', [LegacyUserController::class, 'getPassword']);
 
 });

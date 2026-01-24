@@ -5,6 +5,7 @@ use App\Http\Controllers\v2\JadwalPegawaiController;
 use App\Http\Controllers\v2\PegawaiController;
 use App\Http\Controllers\v2\JadwalTambahanController;
 use App\Http\Controllers\v2\ScheduleGeneratorController;
+use App\Http\Controllers\v2\DokterController;
 
 Route::middleware(['auth:aes', 'claim:role,pegawai|dokter|IT|admin|direksi'])->prefix('sdi')->group(function () {
     // Jadwal Pegawai Routes
@@ -25,8 +26,13 @@ Route::middleware(['auth:aes', 'claim:role,pegawai|dokter|IT|admin|direksi'])->p
     // Pegawai (Employee) Routes - search must come before resource
     Route::get('pegawai/search', [PegawaiController::class, 'search']);
     Route::get('pegawai/statistik', [PegawaiController::class, 'statistik']);
-Route::get('pegawai/list', [PegawaiController::class, 'list']); // Simplified list for dropdown
+    Route::get('pegawai/list', [PegawaiController::class, 'list']); // Simplified list for dropdown
     Route::apiResource('pegawai', PegawaiController::class);
+
+    // Dokter (Doctor) Routes - search must come before resource
+    Route::get('dokter/spesialisasi', [DokterController::class, 'getSpesialisasi']);
+    Route::get('dokter/search', [DokterController::class, 'search']);
+    Route::apiResource('dokter', DokterController::class);
 
     // Kualifikasi Staf Klinis Routes
     Route::get('kualifikasi-staf', [\App\Http\Controllers\v2\KualifikasiStafController::class, 'index']);

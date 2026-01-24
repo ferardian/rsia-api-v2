@@ -33,6 +33,7 @@ class PegawaiController extends Controller
             })
             ->leftJoin('rsia_role as r', 'ur.id_role', '=', 'r.id_role')
             ->leftJoin('petugas as pt', 'pt.nip', '=', 'p.nik')
+            ->leftJoin('rsia_email_pegawai as rep', 'rep.nik', '=', 'p.nik') // Added
             ->leftJoin('departemen as d', 'd.dep_id', '=', 'p.departemen')
             ->select([
                 'p.nik as id_user',
@@ -45,6 +46,7 @@ class PegawaiController extends Controller
                 'p.pendidikan',
                 'p.no_ktp',
                 'pt.no_telp',
+                'rep.email', // Added
                 'p.jbtn',
                 'p.departemen',
                 'd.nama as nama_departemen', // Added
@@ -54,7 +56,7 @@ class PegawaiController extends Controller
                 \DB::raw('GROUP_CONCAT(r.id_role SEPARATOR ",") as id_role'),
                 \DB::raw('GROUP_CONCAT(r.nama_role SEPARATOR ", ") as nama_role')
             ])
-            ->groupBy('p.nik', 'p.nama', 'p.jk', 'p.tmp_lahir', 'p.tgl_lahir', 'p.alamat', 'p.pendidikan', 'p.no_ktp', 'pt.no_telp', 'p.jbtn', 'p.departemen', 'd.nama', 'p.mulai_kerja', 'p.stts_aktif', 'p.photo')
+            ->groupBy('p.nik', 'p.nama', 'p.jk', 'p.tmp_lahir', 'p.tgl_lahir', 'p.alamat', 'p.pendidikan', 'p.no_ktp', 'pt.no_telp', 'rep.email', 'p.jbtn', 'p.departemen', 'd.nama', 'p.mulai_kerja', 'p.stts_aktif', 'p.photo')
             ->orderBy('p.nama', 'asc')
             ->where('p.stts_aktif', 'AKTIF')
             ->where('pt.kd_jbtn', '<>', '-');
@@ -85,7 +87,7 @@ class PegawaiController extends Controller
                 'no_ktp' => $item->no_ktp,
                 'no_telp' => $item->no_telp,
                 'username' => $item->nik, // fallback to nik
-                'email' => null, // email column doesn't exist in pegawai table
+                'email' => $item->email, // Added
                 'id_role' => $primaryRoleId,
                 'role_name' => $item->nama_role ?: 'Belum ada role',
                 'status' => $item->stts_aktif === 'AKTIF' ? 1 : 0,
@@ -174,7 +176,14 @@ class PegawaiController extends Controller
                     'status'     => 1
                 ]);
 
-                $sql = "INSERT/UPDATE pegawai & petugas for nik: {$request->nik}";
+                // Create or Update Email
+                if ($request->email) {
+                    \App\Models\RsiaEmailPegawai::updateOrCreate(['nik' => $request->nik], [
+                        'email' => $request->email
+                    ]);
+                }
+
+                $sql = "INSERT/UPDATE pegawai & petugas & email for nik: {$request->nik}";
                 $this->logTracker($sql, $request);
             });
         } catch (\Exception $e) {
@@ -309,7 +318,14 @@ class PegawaiController extends Controller
                     'status'     => (isset($request->stts_aktif) && $request->stts_aktif == 'AKTIF') ? 1 : 0
                 ]);
 
-                $sql = "UPDATE pegawai & petugas for nik: {$id}";
+                // Update or Create Email
+                if ($request->email) {
+                    \App\Models\RsiaEmailPegawai::updateOrCreate(['nik' => $id], [
+                        'email' => $request->email
+                    ]);
+                }
+
+                $sql = "UPDATE pegawai & petugas & email for nik: {$id}";
                 $this->logTracker($sql, $request);
             });
         } catch (\Exception $e) {

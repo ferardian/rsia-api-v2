@@ -20,4 +20,11 @@ Route::prefix('rawat-inap')->group(function () {
     Route::get('/skrining-gizi/{no_rawat}', [\App\Http\Controllers\v2\SkriningGiziController::class, 'show']);
     Route::post('/skrining-gizi', [\App\Http\Controllers\v2\SkriningGiziController::class, 'store']);
     Route::delete('/skrining-gizi/{no_rawat}', [\App\Http\Controllers\v2\SkriningGiziController::class, 'destroy']);
+
+    // HAIS routes
+    Route::get('/hais', [\App\Http\Controllers\v2\HaisController::class, 'index']);
+    Route::get('/hais/report', [\App\Http\Controllers\v2\HaisController::class, 'report']);
+    Route::post('/hais', [\App\Http\Controllers\v2\HaisController::class, 'store']);
+    Route::put('/hais/{id}', [\App\Http\Controllers\v2\HaisController::class, 'update']);
+    Route::delete('/hais/{id}', [\App\Http\Controllers\v2\HaisController::class, 'destroy']);
 });
