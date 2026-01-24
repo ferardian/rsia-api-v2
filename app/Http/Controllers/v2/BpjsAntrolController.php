@@ -287,13 +287,13 @@ class BpjsAntrolController extends Controller
     {
         $kodebooking = $request->kodebooking;
         
-        // Get registration data
-        $antrol = \App\Models\BpjsAntrol::where('kodebooking', $kodebooking)->first();
-        if (!$antrol) {
+        // Get registration data using ReferensiMobilejknBpjs
+        $referensi = \App\Models\ReferensiMobilejknBpjs::where('nobooking', $kodebooking)->first();
+        if (!$referensi) {
             return response()->json(['metadata' => ['code' => 404, 'message' => 'Data antrean tidak ditemukan']]);
         }
 
-        $no_rawat = $antrol->no_rawat;
+        $no_rawat = $referensi->no_rawat;
         
         // Check if prescription exists
         $hasResep = \App\Models\ResepObat::where('no_rawat', $no_rawat)->exists();
