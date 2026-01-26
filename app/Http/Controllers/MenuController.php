@@ -29,6 +29,11 @@ class MenuController extends Controller
                 $query->where('parent_id', $request->parent_id);
             }
 
+            // Filter by platform
+            if ($request->has('platform')) {
+                $query->where('platform', $request->platform);
+            }
+
             // Search
             if ($request->has('search')) {
                 $search = $request->search;
@@ -145,12 +150,18 @@ class MenuController extends Controller
                 'determined_role_id' => $roleId
             ]);
 
-            $menus = DB::table('rsia_role_menu as rm')
+            $menusQuery = DB::table('rsia_role_menu as rm')
                 ->join('rsia_menu as m', 'rm.id_menu', '=', 'm.id_menu')
                 ->where('rm.id_role', $roleId)
                 ->where('m.is_active', 1)
-                ->where('rm.can_view', 1)
-                ->select(
+                ->where('rm.can_view', 1);
+
+            // Filter by platform if provided
+            if ($request->has('platform')) {
+                $menusQuery->where('m.platform', $request->platform);
+            }
+
+            $menus = $menusQuery->select(
                     'm.id_menu',
                     'm.parent_id',
                     'm.nama_menu',
@@ -204,7 +215,8 @@ class MenuController extends Controller
                 'route' => 'nullable|string|max:100',
                 'parent_id' => 'nullable|integer|exists:rsia_menu,id_menu',
                 'urutan' => 'nullable|integer|min:0',
-                'is_active' => 'boolean'
+                'is_active' => 'boolean',
+                'platform' => 'nullable|string|in:web,mobile'
             ]);
 
             // If parent_id is provided, check if it exists and is not creating circular reference
@@ -221,6 +233,7 @@ class MenuController extends Controller
                 'parent_id' => $request->parent_id,
                 'urutan' => $request->urutan ?? 0,
                 'is_active' => $request->boolean('is_active', true),
+                'platform' => $request->platform ?? 'web',
                 'created_by' => Auth::id()
             ]);
 
@@ -280,7 +293,8 @@ class MenuController extends Controller
                 'route' => 'nullable|string|max:100',
                 'parent_id' => 'nullable|integer|exists:rsia_menu,id_menu',
                 'urutan' => 'nullable|integer|min:0',
-                'is_active' => 'boolean'
+                'is_active' => 'boolean',
+                'platform' => 'nullable|string|in:web,mobile'
             ]);
 
             // Check circular reference if parent_id is being changed
@@ -297,6 +311,7 @@ class MenuController extends Controller
                 'parent_id' => $request->parent_id,
                 'urutan' => $request->urutan ?? $menu->urutan,
                 'is_active' => $request->boolean('is_active', $menu->is_active),
+                'platform' => $request->platform ?? $menu->platform,
                 'updated_by' => Auth::id()
             ]);
 

@@ -20,6 +20,7 @@ class RsiaMenu extends Model
         'parent_id',
         'urutan',
         'is_active',
+        'platform',
         'created_by',
         'updated_by'
     ];
@@ -69,6 +70,11 @@ class RsiaMenu extends Model
     public function scopeOrdered($query)
     {
         return $query->orderBy('parent_id')->orderBy('urutan');
+    }
+
+    public function scopePlatform($query, $platform)
+    {
+        return $query->where('platform', $platform);
     }
 
     // Helper Methods
