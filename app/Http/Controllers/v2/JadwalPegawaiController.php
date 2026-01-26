@@ -14,8 +14,9 @@ use Illuminate\Support\Facades\DB;
 class JadwalPegawaiController extends Controller
 {
     // FETCH SUBMISSION/DRAFT SCHEDULE
-    public function index(Request $request) 
+    public function index(Request $request, $nik = null) 
     {
+        $nik = $nik ?: $request->input('nik');
         $bulanRaw = $request->input('bulan', date('m'));
         $bulan = sprintf('%02d', $bulanRaw); // Force 2 digits (e.g. 1 -> 01)
         
@@ -26,8 +27,12 @@ class JadwalPegawaiController extends Controller
         // Query Pegawai
         $query = Pegawai::query()
             ->select('id', 'nik', 'nama', 'departemen', 'jbtn')
-            ->with('dep:dep_id,nama') // Eager load department name
+            ->with(['dep:dep_id,nama']) // Eager load department name
             ->where('stts_aktif', 'AKTIF');
+
+        if ($nik) {
+            $query->where('nik', $nik);
+        }
 
         // Hierarchical Approval Logic
         // Filter employees based on who the current user can approve (Department based only)
@@ -116,6 +121,20 @@ class JadwalPegawaiController extends Controller
             }
 
             $data['jadwal'] = $sched ? $sched : null;
+            
+            // Add today's shift data for dashboard (Flutter compatibility)
+            if ($sched) {
+                $dayColumn = 'h' . ltrim(date('d'), '0');
+                $shiftName = $sched->{$dayColumn};
+                if ($shiftName && $shiftName != '-') {
+                    $data['jam_masuk'] = JamMasuk::where('shift', $shiftName)->first();
+                } else {
+                    $data['jam_masuk'] = null;
+                }
+            } else {
+                $data['jam_masuk'] = null;
+            }
+
             return $data;
         });
 
