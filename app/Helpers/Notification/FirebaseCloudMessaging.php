@@ -23,8 +23,15 @@ class FirebaseCloudMessaging
      * */
     public function __construct()
     {
+        $path = base_path($this->credentials);
+        
+        // Safety check
+        if (!file_exists($path)) {
+            \Log::warning("FCM Credentials file not found at: " . $path);
+        }
+
         // initialize firebase 
-        $this->factory = (new Factory)->withServiceAccount(base_path($this->credentials));
+        $this->factory = (new Factory)->withServiceAccount($path);
 
         // get messaging instance
         $this->messaging = $this->factory->createMessaging();
