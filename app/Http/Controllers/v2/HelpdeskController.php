@@ -77,7 +77,8 @@ class HelpdeskController extends Controller
     {
         $request->validate([
             'temp_log_id' => 'required|exists:rsia_helpdesk_temp_log,id',
-            'prioritas'   => 'required|in:High,Medium,Low'
+            'prioritas'   => 'required|in:High,Medium,Low',
+            'nik_teknisi' => 'nullable|exists:pegawai,nik'
         ]);
 
         $log = RsiaHelpdeskTempLog::find($request->temp_log_id);
@@ -99,7 +100,7 @@ class HelpdeskController extends Controller
             $nextId = $lastTicket ? $lastTicket->id + 1 : 1;
             $no_tiket = "HTK/{$year}/{$month}/" . str_pad($nextId, 4, '0', STR_PAD_LEFT);
 
-            $ticket = RsiaHelpdeskTicket::create([
+            $ticketData = [
                 'no_tiket'    => $no_tiket,
                 'tanggal'     => Carbon::now(),
                 'nik_pelapor' => $log->nik_pelapor,
@@ -107,7 +108,16 @@ class HelpdeskController extends Controller
                 'keluhan'     => $log->isi_laporan,
                 'prioritas'   => $request->prioritas,
                 'status'      => 'Open'
-            ]);
+            ];
+
+            // If technician is selected immediately
+            if ($request->has('nik_teknisi') && !empty($request->nik_teknisi)) {
+                $ticketData['nik_teknisi'] = $request->nik_teknisi;
+                $ticketData['status'] = 'Proses';
+                $ticketData['jam_mulai'] = Carbon::now();
+            }
+
+            $ticket = RsiaHelpdeskTicket::create($ticketData);
 
             $log->status = 'PROCESSED';
             $log->save();
