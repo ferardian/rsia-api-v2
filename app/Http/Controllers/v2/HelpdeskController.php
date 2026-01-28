@@ -129,15 +129,19 @@ class HelpdeskController extends Controller
             // Trigger notification to IT
             try {
                 \Log::info("Attempting to send FCM notification to 'it' topic.");
-                $msg = (new FirebaseCloudMessaging)->buildNotification(
-                    'it',
-                    'Laporan Helpdesk Baru',
-                    "Keluhan: " . (strlen($log->isi_laporan) > 50 ? substr($log->isi_laporan, 0, 47) . '...' : $log->isi_laporan),
-                    [
-                        'route' => 'helpdesk_main',
-                        'click_action' => 'FLUTTER_NOTIFICATION_CLICK'
-                    ]
-                );
+                // Get reporter info
+            $namaPelapor = $user->detail->nama ?? 'Pegawai';
+            $unitPelapor = $user->detail->dep->nama ?? ($user->detail->departemen ?? '-');
+
+            $msg = (new FirebaseCloudMessaging)->buildNotification(
+                'it',
+                'Laporan Helpdesk Baru',
+                "Pelapor: $namaPelapor\nUnit: $unitPelapor\n\nKeluhan: " . (strlen($log->isi_laporan) > 50 ? substr($log->isi_laporan, 0, 47) . '...' : $log->isi_laporan),
+                [
+                    'route' => 'helpdesk_main',
+                    'click_action' => 'FLUTTER_NOTIFICATION_CLICK'
+                ]
+            );
                 FirebaseCloudMessaging::send($msg);
                 \Log::info("FCM notification dispatched to 'it' topic.");
             } catch (\Exception $e) {
