@@ -98,7 +98,6 @@ class FirebaseCloudMessaging
     {
         return CloudMessage::withTarget('topic', $topic)
             ->withNotification([
-                'topic' => $topic,
                 'title' => $title,
                 'body' => $body
             ])
