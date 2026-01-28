@@ -145,6 +145,24 @@ class HelpdeskController extends Controller
             $data['jam_selesai'] = Carbon::now();
         }
 
+        // Trigger Start Time (Response Time)
+        // If status changes to 'Proses' OR technician is assigned for the first time
+        // And jam_mulai is not yet set
+        if (
+            (
+                (isset($data['status']) && $data['status'] === 'Proses') || 
+                (isset($data['nik_teknisi']) && !empty($data['nik_teknisi']))
+            ) && 
+            is_null($ticket->jam_mulai)
+        ) {
+            $data['jam_mulai'] = Carbon::now();
+            
+            // If status is not explicitly set but technician is assigned, auto-move to Process
+            if (!isset($data['status']) && $ticket->status === 'Open') {
+                $data['status'] = 'Proses';
+            }
+        }
+
         $ticket->update($data);
 
         return response()->json([
