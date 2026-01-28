@@ -124,9 +124,11 @@ class HelpdeskController extends Controller
             $log->raw_message = 'Reported via Mobile App';
             $log->status = 'WAITING';
             $log->save();
+            \Log::info("Helpdesk report saved successfully. ID: " . $log->id);
 
             // Trigger notification to IT
             try {
+                \Log::info("Attempting to send FCM notification to 'it' topic.");
                 $msg = (new FirebaseCloudMessaging)->buildNotification(
                     'it',
                     'Laporan Helpdesk Baru',
@@ -137,6 +139,7 @@ class HelpdeskController extends Controller
                     ]
                 );
                 FirebaseCloudMessaging::send($msg);
+                \Log::info("FCM notification dispatched to 'it' topic.");
             } catch (\Exception $e) {
                 \Log::error("FCM Error for Helpdesk: " . $e->getMessage());
             }
