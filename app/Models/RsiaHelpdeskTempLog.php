@@ -13,7 +13,7 @@ class RsiaHelpdeskTempLog extends Model
 {
     protected $table = 'rsia_helpdesk_temp_log';
     protected $primaryKey = 'id';
-    public $timestamps = false; // Using database default current_timestamp() for created_at
+    public $timestamps = true;
 
     protected $fillable = [
         'nomor_wa',
@@ -22,10 +22,6 @@ class RsiaHelpdeskTempLog extends Model
         'isi_laporan',
         'raw_message',
         'status'
-    ];
-
-    protected $casts = [
-        'created_at' => 'datetime',
     ];
 
     public function pegawai()

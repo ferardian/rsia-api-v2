@@ -207,8 +207,9 @@ class HelpdeskController extends Controller
 
         return DB::transaction(function () use ($log, $request) {
             // Generate no_tiket: HTK/YYYY/MM/ID
-            $year = date('Y');
-            $month = date('m');
+            $now = Carbon::now();
+            $year = $now->format('Y');
+            $month = $now->format('m');
             
             // Get last ID for the series
             $lastTicket = RsiaHelpdeskTicket::orderBy('id', 'DESC')->first();
@@ -217,7 +218,6 @@ class HelpdeskController extends Controller
 
             $ticketData = [
                 'no_tiket'    => $no_tiket,
-                'tanggal'     => Carbon::now(),
                 'nik_pelapor' => $log->nik_pelapor,
                 'dep_id'      => $log->kd_dep,
                 'keluhan'     => $log->isi_laporan,

@@ -8,7 +8,10 @@ class RsiaHelpdeskTicket extends Model
 {
     protected $table = 'rsia_helpdesk_tickets';
     protected $primaryKey = 'id';
-    public $timestamps = false; // Using database default for created_at (tanggal)
+    public $timestamps = true;
+
+    const CREATED_AT = 'tanggal';
+    const UPDATED_AT = null; // Assuming no updated_at column in this legacy table
 
     protected $fillable = [
         'no_tiket',
