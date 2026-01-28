@@ -27,6 +27,49 @@ class BpjsAntrolController extends Controller
         $endpoint = "/antrean/pendaftaran/tanggal/" . $tanggal;
         $response = $this->antrolService->get($endpoint);
 
+        // Enrich response with local data (Patient Name & Doctor Name)
+        if (isset($response['response']) && is_array($response['response'])) {
+            foreach ($response['response'] as &$item) {
+                // Default values
+                $item['nama_pasien'] = '-';
+                $item['nama_dokter'] = '-';
+
+                // Strategy 1: Match via referensi_mobilejkn_bpjs (most reliable for bridging)
+                $ref = \App\Models\ReferensiMobilejknBpjs::where('nobooking', $item['kodebooking'])->first();
+                
+                if ($ref) {
+                    $reg = \App\Models\RegPeriksa::where('no_rawat', $ref->no_rawat)
+                        ->with(['pasien', 'dokter'])
+                        ->first();
+                    
+                    if ($reg) {
+                        $item['nama_pasien'] = $reg->pasien->nm_pasien ?? '-';
+                        $item['nama_dokter'] = $reg->dokter->nm_dokter ?? '-';
+                        continue; // Found, move to next item
+                    }
+                }
+
+                // Strategy 2: Match via BPJS Card verify against local patient data
+                // This is a fallback if bridging data is missing but patient exists
+                if (!empty($item['nopeserta'])) {
+                    $pasien = \App\Models\Pasien::where('no_kartu', $item['nopeserta'])->first();
+                    if ($pasien) {
+                         $item['nama_pasien'] = $pasien->nm_pasien;
+                         
+                         // Try to find registration by no_rkm_medis and date to get doctor
+                         $reg = \App\Models\RegPeriksa::where('no_rkm_medis', $pasien->no_rkm_medis)
+                            ->where('tgl_registrasi', $tanggal)
+                            ->with('dokter')
+                            ->first();
+
+                         if ($reg) {
+                             $item['nama_dokter'] = $reg->dokter->nm_dokter ?? '-';
+                         }
+                    }
+                }
+            }
+        }
+
         return response()->json($response);
     }
 
