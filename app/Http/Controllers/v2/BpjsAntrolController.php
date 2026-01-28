@@ -65,6 +65,26 @@ class BpjsAntrolController extends Controller
                          if ($reg) {
                              $item['nama_dokter'] = $reg->dokter->nm_dokter ?? '-';
                          }
+                         continue; // Found, move to next item
+                    }
+                }
+
+                // Strategy 3: Match via Medical Record Number (RM)
+                // Fallback for cases where BPJS card number in local DB might differ or be empty
+                if (!empty($item['norekammedis']) && $item['nama_pasien'] == '-') {
+                    $pasien = \App\Models\Pasien::where('no_rkm_medis', $item['norekammedis'])->first();
+                    if ($pasien) {
+                        $item['nama_pasien'] = $pasien->nm_pasien;
+
+                        // Try to find registration by no_rkm_medis and date to get doctor
+                        $reg = \App\Models\RegPeriksa::where('no_rkm_medis', $pasien->no_rkm_medis)
+                            ->where('tgl_registrasi', $tanggal)
+                            ->with('dokter')
+                            ->first();
+
+                        if ($reg) {
+                            $item['nama_dokter'] = $reg->dokter->nm_dokter ?? '-';
+                        }
                     }
                 }
             }
