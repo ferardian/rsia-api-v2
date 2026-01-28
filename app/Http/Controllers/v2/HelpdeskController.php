@@ -135,8 +135,8 @@ class HelpdeskController extends Controller
 
             $msg = (new FirebaseCloudMessaging)->buildNotification(
                 'it',
-                'Laporan Helpdesk Baru',
-                "Pelapor: $namaPelapor\nUnit: $unitPelapor\n\nKeluhan: " . (strlen($log->isi_laporan) > 50 ? substr($log->isi_laporan, 0, 47) . '...' : $log->isi_laporan),
+                '📢 Laporan Helpdesk Baru',
+                "👤 Pelapor : $namaPelapor\n🏢 Unit    : $unitPelapor\n📝 Keluhan : " . (strlen($log->isi_laporan) > 60 ? substr($log->isi_laporan, 0, 57) . '...' : $log->isi_laporan),
                 [
                     'route' => 'helpdesk_main',
                     'click_action' => 'FLUTTER_NOTIFICATION_CLICK'
