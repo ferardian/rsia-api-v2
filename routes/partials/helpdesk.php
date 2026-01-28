@@ -10,6 +10,8 @@ use App\Http\Controllers\v2\HelpdeskController;
 
 Route::prefix('helpdesk')->middleware(['user-aes', 'claim:role,pegawai'])->group(function () {
     Route::get('/tiket', [HelpdeskController::class, 'index']);
+    Route::get('/tiket/history', [HelpdeskController::class, 'history']);
+    Route::post('/tiket', [HelpdeskController::class, 'store']);
     Route::put('/tiket/{id}/status', [HelpdeskController::class, 'updateStatus']);
     
     // Tiket Lanjutan

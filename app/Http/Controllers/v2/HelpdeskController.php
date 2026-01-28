@@ -13,6 +13,8 @@ use App\Models\RsiaHelpdeskTicket;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
+use App\Helpers\Notification\FirebaseCloudMessaging;
+use Kreait\Firebase\Messaging\CloudMessage;
 
 class HelpdeskController extends Controller
 {
@@ -43,6 +45,112 @@ class HelpdeskController extends Controller
             'message' => 'Data tiket helpdesk berhasil diambil',
             'data'    => $tickets
         ]);
+    }
+
+    public function history(Request $request) {
+        $user = $request->user();
+        if (!$user->relationLoaded('detail')) {
+            $user->load('detail');
+        }
+
+        $nik = $user->id_user; // user-aes maps id_user to nik
+        $dep_id = $user->detail->departemen ?? '-';
+
+        $limit = $request->input('limit', 10);
+        $status = $request->input('status');
+
+        $query = RsiaHelpdeskTempLog::with(['pegawai:nik,nama', 'departemen:dep_id,nama']);
+
+        // IF NOT IT (dep_id != 'IT'), then filter by department
+        // Assuming 'IT' is the department code for Information Technology
+        if ($dep_id !== 'IT') {
+            $query->where('kd_dep', $dep_id);
+        }
+
+        if ($status) {
+            $query->where('status', $status);
+        }
+
+        $tickets = $query->orderBy('created_at', 'DESC')->paginate($limit);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Riwayat tiket berhasil diambil',
+            'data'    => $tickets
+        ]);
+    }
+
+    public function store(Request $request)
+    {
+        $request->validate([
+            'isi_laporan' => 'required|string',
+        ]);
+
+        $user = $request->user();
+        if (!$user) { // Fallback if user not found strictly
+             return response()->json(['success' => false, 'message' => 'Unauthorized'], 401);
+        }
+
+        try {
+            // Ensure detail (Pegawai) and petugas relationships are loaded
+            if (!$user->relationLoaded('detail')) {
+                $user->load('detail.petugas');
+            } else if (!$user->detail->relationLoaded('petugas')) {
+                $user->detail->load('petugas');
+            }
+
+            // Get phone number from petugas table
+            $nomor_wa = '-';
+            if ($user->detail && $user->detail->petugas && !empty($user->detail->petugas->no_telp)) {
+                $phone = trim($user->detail->petugas->no_telp);
+                
+                // Format to 62...
+                if (str_starts_with($phone, '0')) {
+                    $nomor_wa = '62' . substr($phone, 1);
+                } elseif (str_starts_with($phone, '62')) {
+                    $nomor_wa = $phone;
+                } elseif (str_starts_with($phone, '+62')) {
+                    $nomor_wa = substr($phone, 1);
+                } else {
+                    $nomor_wa = '62' . $phone;
+                }
+            }
+
+            $log = new RsiaHelpdeskTempLog();
+            $log->nomor_wa = $nomor_wa;
+            $log->nik_pelapor = $user->id_user;
+            $log->kd_dep = $user->detail ? $user->detail->departemen : '-';
+            $log->isi_laporan = $request->isi_laporan;
+            $log->raw_message = 'Reported via Mobile App';
+            $log->status = 'WAITING';
+            $log->save();
+
+            // Trigger notification to IT
+            try {
+                $msg = (new FirebaseCloudMessaging)->buildNotification(
+                    'it',
+                    'Laporan Helpdesk Baru',
+                    "Keluhan: " . (strlen($log->isi_laporan) > 50 ? substr($log->isi_laporan, 0, 47) . '...' : $log->isi_laporan),
+                    [
+                        'route' => 'helpdesk_main',
+                        'click_action' => 'FLUTTER_NOTIFICATION_CLICK'
+                    ]
+                );
+                FirebaseCloudMessaging::send($msg);
+            } catch (\Exception $e) {
+                \Log::error("FCM Error for Helpdesk: " . $e->getMessage());
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Laporan berhasil dikirim'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal mengirim laporan: ' . $e->getMessage()
+            ], 500);
+        }
     }
 
     public function getTickets(Request $request)
