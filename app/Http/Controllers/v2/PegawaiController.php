@@ -569,6 +569,7 @@ class PegawaiController extends Controller
 
                 $transformedData[] = [
                     'id_user' => $item->id_user,
+                    'nik' => $item->nik, // Added for frontend compatibility
                     'nip' => $item->nik,
                     'nama' => $item->nama,
                     'jk' => $item->jk,
