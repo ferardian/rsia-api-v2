@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Route;
 Route::middleware(['auth:aes', 'claim:role,pegawai|dokter'])->group(function () {
 
   Route::get('pegawai/get', [\App\Http\Controllers\v2\PegawaiController::class, 'get'])->name('pegawai.get');
+  Route::get('pegawai/search', [\App\Http\Controllers\v2\PegawaiController::class, 'search'])->name('pegawai.search');
   
   // ==================== PEGAWAI
   // Use v2 controller for all pegawai operations to get role data
