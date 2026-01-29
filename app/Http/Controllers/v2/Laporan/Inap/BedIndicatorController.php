@@ -38,11 +38,11 @@ class BedIndicatorController extends Controller
             // Base metrics for overall
             $A_all = $bedLog;
             $HP_all = KamarInap::whereBetween('tgl_keluar', [$tgl_awal, $tgl_akhir])
-                ->where('stts_pulang', '!=', '-')
+                ->where('tgl_keluar', '!=', '0000-00-00')
                 ->where('stts_pulang', '!=', 'Pindah Kamar')
                 ->sum('lama');
             $D_all = KamarInap::whereBetween('tgl_keluar', [$tgl_awal, $tgl_akhir])
-                ->where('stts_pulang', '!=', '-')
+                ->where('tgl_keluar', '!=', '0000-00-00')
                 ->where('stts_pulang', '!=', 'Pindah Kamar')
                 ->count();
 
@@ -73,13 +73,13 @@ class BedIndicatorController extends Controller
 
                 // Get HP and D for this category using keyword in kd_kamar
                 $HP = KamarInap::whereBetween('tgl_keluar', [$tgl_awal, $tgl_akhir])
-                    ->where('stts_pulang', '!=', '-')
+                    ->where('tgl_keluar', '!=', '0000-00-00')
                     ->where('stts_pulang', '!=', 'Pindah Kamar')
                     ->where('kd_kamar', 'like', '%' . $cat['keyword'] . '%')
                     ->sum('lama');
 
                 $D = KamarInap::whereBetween('tgl_keluar', [$tgl_awal, $tgl_akhir])
-                    ->where('stts_pulang', '!=', '-')
+                    ->where('tgl_keluar', '!=', '0000-00-00')
                     ->where('stts_pulang', '!=', 'Pindah Kamar')
                     ->where('kd_kamar', 'like', '%' . $cat['keyword'] . '%')
                     ->count();
