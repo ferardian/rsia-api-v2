@@ -133,8 +133,11 @@ class PasswordResetController extends Controller
         Cache::forget('captcha_' . $request->captcha_id);
 
         // Validate Username & Old Password
-        $user = User::where('id_user', DB::raw("AES_ENCRYPT('{$request->username}', '" . env('MYSQL_AES_KEY_IDUSER') . "')"))
-            ->where('password', DB::raw("AES_ENCRYPT('{$request->old_password}', '" . env('MYSQL_AES_KEY_PASSWORD') . "')"))
+        $passwordKey = env('MYSQL_AES_KEY_PASSWORD');
+        $idUserKey = env('MYSQL_AES_KEY_IDUSER');
+
+        $user = User::whereRaw("AES_DECRYPT(id_user, '{$idUserKey}') = ?", [$request->username])
+            ->whereRaw("AES_DECRYPT(password, '{$passwordKey}') = ?", [$request->old_password])
             ->first();
 
         if (!$user) {
