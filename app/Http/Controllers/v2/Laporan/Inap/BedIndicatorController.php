@@ -21,6 +21,17 @@ class BedIndicatorController extends Controller
             $end = Carbon::parse($tgl_akhir);
             $t = $start->diffInDays($end) + 1;
 
+            // 1. A (Bed Count) - Get from log for the specific month/year
+            // If the range spans multiple months, we use the end date's month as the reference for total capacity
+            $bedLog = RsiaLogJumlahKamar::where('tahun', $end->format('Y'))
+                ->where('bulan', $end->format('m'))
+                ->sum('jumlah');
+
+            // Fallback to current bed count if log is empty
+            if ($bedLog == 0) {
+                $bedLog = DB::table('kamar')->where('statusdata', '1')->count();
+            }
+
             // Base metrics for overall
             $A_all = $bedLog;
             $HP_all = KamarInap::whereBetween('tgl_keluar', [$tgl_awal, $tgl_akhir])
