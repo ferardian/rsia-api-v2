@@ -44,7 +44,8 @@ class BedIndicatorController extends Controller
             $D_all = KamarInap::whereBetween('tgl_keluar', [$tgl_awal, $tgl_akhir])
                 ->where('tgl_keluar', '!=', '0000-00-00')
                 ->where('stts_pulang', '!=', 'Pindah Kamar')
-                ->count();
+                ->distinct()
+                ->count('no_rawat');
 
             // Breakdown by category
             $categories = [
@@ -82,7 +83,8 @@ class BedIndicatorController extends Controller
                     ->where('tgl_keluar', '!=', '0000-00-00')
                     ->where('stts_pulang', '!=', 'Pindah Kamar')
                     ->where('kd_kamar', 'like', '%' . $cat['keyword'] . '%')
-                    ->count();
+                    ->distinct()
+                    ->count('no_rawat');
 
                 // Calculations for this category
                 $bor = ($A * $t) > 0 ? ($HP / ($A * $t)) * 100 : 0;
