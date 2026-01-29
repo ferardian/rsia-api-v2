@@ -12,6 +12,7 @@ Route::middleware(['claim:role,pegawai|dokter|perawat|kasir'])->prefix('operasi'
     Route::get('laporan/list', [\App\Http\Controllers\v2\OperasiController::class, 'indexLaporan']);
     Route::get('laporan', [\App\Http\Controllers\v2\OperasiController::class, 'getLaporan']);
     Route::post('laporan', [\App\Http\Controllers\v2\OperasiController::class, 'storeLaporan']);
+    Route::delete('laporan', [\App\Http\Controllers\v2\OperasiController::class, 'destroyLaporan']);
     Route::get('dokter', [\App\Http\Controllers\v2\OperasiController::class, 'getDokter']);
     Route::get('pegawai', [\App\Http\Controllers\v2\OperasiController::class, 'getPegawai']);
 });

@@ -16,7 +16,7 @@ class DetailResource extends JsonResource
     {
         return [
             "id_user" => $this->id_user,
-            "detail" => \App\Http\Resources\Pegawai\SimpleResource::make($this->id_user),
+            "detail" => \App\Http\Resources\Pegawai\SimpleResource::make($this->detail),
         ];
     }
 }

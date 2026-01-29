@@ -1175,4 +1175,75 @@ class PegawaiController extends Controller
             ]
         ]);
     }
+
+    public function tanpaEmail()
+    {
+        try {
+            $pegawai = \DB::table('pegawai as p')
+                ->leftJoin('rsia_email_pegawai as rep', 'rep.nik', '=', 'p.nik')
+                ->leftJoin('departemen as d', 'd.dep_id', '=', 'p.departemen')
+                ->join('petugas as pt', 'pt.nip', '=', 'p.nik')
+                ->where('p.stts_aktif', 'AKTIF')
+                ->where('pt.kd_jbtn', '!=', '-')
+                ->where(function($q) {
+                    $q->whereNull('rep.email')
+                      ->orWhere('rep.email', '')
+                      ->orWhere('rep.email', '-')
+                      ->orWhere('rep.email', 'NOT REGEXP', '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$');
+                })
+                ->select([
+                    'p.nik',
+                    'p.nama',
+                    'd.nama as nama_departemen',
+                    'rep.email'
+                ])
+                ->get();
+
+            $transformedData = [];
+            foreach ($pegawai as $item) {
+                $transformedData[] = [
+                    'nik' => $item->nik,
+                    'nama' => $item->nama,
+                    'departemen' => $item->nama_departemen,
+                    'email' => $item->email ?? '(Belum Terdaftar)'
+                ];
+            }
+
+            return response()->json([
+                'success' => true,
+                'data' => $transformedData
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function updateEmail(\Illuminate\Http\Request $request)
+    {
+        $request->validate([
+            'nik' => 'required',
+            'email' => 'required|email'
+        ]);
+
+        try {
+            $email = \App\Models\RsiaEmailPegawai::updateOrCreate(
+                ['nik' => $request->nik],
+                ['email' => $request->email]
+            );
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Email pegawai berhasil diperbarui',
+                'data' => $email
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
 }

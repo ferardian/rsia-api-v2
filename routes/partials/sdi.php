@@ -27,6 +27,9 @@ Route::middleware(['auth:aes', 'claim:role,pegawai|dokter|IT|admin|direksi'])->p
     Route::get('pegawai/search', [PegawaiController::class, 'search']);
     Route::get('pegawai/statistik', [PegawaiController::class, 'statistik']);
     Route::get('pegawai/list', [PegawaiController::class, 'list']); // Simplified list for dropdown
+    Route::get('pegawai/tanpa-email', [PegawaiController::class, 'tanpaEmail']);
+    Route::post('pegawai/update-email', [PegawaiController::class, 'updateEmail']);
+    Route::post('pegawai/update-profile', [PegawaiController::class, 'updateProfile']);
     Route::apiResource('pegawai', PegawaiController::class);
 
     // Dokter (Doctor) Routes - search must come before resource

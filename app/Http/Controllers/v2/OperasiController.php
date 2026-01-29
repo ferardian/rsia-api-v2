@@ -337,4 +337,42 @@ class OperasiController extends Controller
         $data = Pegawai::select('nik', 'nama')->where('stts_aktif', 'AKTIF')->get();
          return response()->json(['success' => true, 'data' => $data]);
     }
+
+    public function destroyLaporan(Request $request)
+    {
+        $request->validate([
+            'no_rawat' => 'required',
+            'kode_paket' => 'required',
+            'tgl_operasi' => 'required'
+        ]);
+
+        try {
+            $deleted = \DB::table('rsia_operasi_safe')
+                ->where('no_rawat', $request->no_rawat)
+                ->where('kode_paket', $request->kode_paket)
+                ->where('tgl_operasi', $request->tgl_operasi)
+                ->delete();
+
+            if ($deleted) {
+                $sqlLog = "DELETE FROM rsia_operasi_safe WHERE no_rawat='{$request->no_rawat}' AND kode_paket='{$request->kode_paket}' AND tgl_operasi='{$request->tgl_operasi}'";
+                $this->logTracker($sqlLog, $request);
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Laporan operasi berhasil dihapus'
+                ]);
+            }
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Laporan operasi tidak ditemukan'
+            ], 404);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal menghapus laporan: ' . $e->getMessage()
+            ], 500);
+        }
+    }
 }

@@ -7,6 +7,7 @@ class ApiResponse
   public static function success($message = null, $data = [])
   {
     $body = [
+      'success' => true,
       'message' => $message,
     ];
 
@@ -20,6 +21,7 @@ class ApiResponse
   public static function successWithData($data, $message = null, $additionalMeta = [])
   {
     $response = [
+      'success' => true,
       'message' => $message,
       'data'    => $data,
     ];
