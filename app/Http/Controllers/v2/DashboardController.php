@@ -841,6 +841,53 @@ class DashboardController extends Controller
                 ->limit(10)
                 ->get();
 
+            // 9. Kelompok Usia (Demografi)
+            $data['usia'] = (clone $baseQuery)
+                ->join('pasien', 'reg_periksa.no_rkm_medis', '=', 'pasien.no_rkm_medis')
+                ->selectRaw("
+                    CASE 
+                        WHEN TIMESTAMPDIFF(YEAR, pasien.tgl_lahir, CURDATE()) < 2 THEN 'Bayi'
+                        WHEN TIMESTAMPDIFF(YEAR, pasien.tgl_lahir, CURDATE()) BETWEEN 2 AND 12 THEN 'Anak'
+                        WHEN TIMESTAMPDIFF(YEAR, pasien.tgl_lahir, CURDATE()) BETWEEN 13 AND 18 THEN 'Remaja'
+                        WHEN TIMESTAMPDIFF(YEAR, pasien.tgl_lahir, CURDATE()) BETWEEN 19 AND 59 THEN 'Dewasa'
+                        ELSE 'Lansia'
+                    END as label,
+                    COUNT(*) as total
+                ")
+                ->groupBy('label')
+                ->get();
+
+            // 10. Perbandingan Tren (Period-over-Period)
+            $durationArr = $startDate->diff($endDate);
+            $daysCount = $durationArr->days + 1;
+            
+            $prevEndDate = $startDate->copy()->subDay();
+            $prevStartDate = $prevEndDate->copy()->subDays($daysCount - 1);
+
+            $currentTotal = $baseQuery->count();
+            
+            $prevQuery = RegPeriksa::whereBetween('tgl_registrasi', [
+                $prevStartDate->toDateString(), 
+                $prevEndDate->toDateString()
+            ])->where('stts', '!=', 'Batal');
+
+            if ($status_lanjut && $status_lanjut !== 'all') {
+                $prevQuery->where('status_lanjut', $status_lanjut);
+            }
+
+            $prevTotal = $prevQuery->count();
+            
+            $diff = $currentTotal - $prevTotal;
+            $percent = $prevTotal > 0 ? ($diff / $prevTotal) * 100 : ($currentTotal > 0 ? 100 : 0);
+
+            $data['trend'] = [
+                'current' => $currentTotal,
+                'previous' => $prevTotal,
+                'diff' => $diff,
+                'percent' => round($percent, 1),
+                'label' => $prevStartDate->format('d/m') . ' - ' . $prevEndDate->format('d/m')
+            ];
+
             // Add inpatient care duration statistics if status is Ranap
             if ($status_lanjut === 'Ranap') {
                 // User DO:
