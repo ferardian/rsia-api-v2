@@ -9,3 +9,6 @@ Route::prefix('laporan/penyakit')->group(function () {
     Route::get('death-details', [DiagnosaPenyakitController::class, 'getDeathDetails']);
     Route::get('deadliest', [DiagnosaPenyakitController::class, 'getDeadliestDiseases']);
 });
+Route::prefix('laporan/statistik')->group(function () {
+    Route::get('ranap/indicators', [\App\Http\Controllers\v2\Laporan\Inap\BedIndicatorController::class, 'getIndicators']);
+});
