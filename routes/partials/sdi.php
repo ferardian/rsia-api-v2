@@ -6,6 +6,7 @@ use App\Http\Controllers\v2\PegawaiController;
 use App\Http\Controllers\v2\JadwalTambahanController;
 use App\Http\Controllers\v2\ScheduleGeneratorController;
 use App\Http\Controllers\v2\DokterController;
+use App\Http\Controllers\v2\MappingJabatanController;
 
 Route::middleware(['auth:aes', 'claim:role,pegawai|dokter|IT|admin|direksi'])->prefix('sdi')->group(function () {
     // Jadwal Pegawai Routes
@@ -57,4 +58,7 @@ Route::middleware(['auth:aes', 'claim:role,pegawai|dokter|IT|admin|direksi'])->p
     Route::post('committees/anggota', [\App\Http\Controllers\v2\CommitteeController::class, 'store']);
     Route::put('committees/anggota/{id}', [\App\Http\Controllers\v2\CommitteeController::class, 'update']);
     Route::delete('committees/anggota/{id}', [\App\Http\Controllers\v2\CommitteeController::class, 'destroy']);
+
+    Route::get('mapping-jabatan/jabatan-list', [MappingJabatanController::class, 'getJabatanList']);
+    Route::resource('mapping-jabatan', MappingJabatanController::class);
 });

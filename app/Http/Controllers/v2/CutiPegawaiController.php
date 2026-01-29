@@ -27,7 +27,7 @@ class CutiPegawaiController extends Controller
             $query->whereYear('tanggal_cuti', $request->year);
         }
         
-        $cuti = $query->orderBy('tanggal_cuti', 'desc')->paginate(10);
+        $cuti = $query->orderBy('tanggal_cuti', 'desc')->get();
         return new \App\Http\Resources\RealDataCollection($cuti);
     }
 
