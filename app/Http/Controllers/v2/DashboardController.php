@@ -801,6 +801,36 @@ class DashboardController extends Controller
                 ]
             ];
 
+            // 7. Daily Chart Data
+            $startDate = Carbon::parse($tgl_awal);
+            $endDate = Carbon::parse($tgl_akhir);
+            $days = $startDate->diffInDays($endDate) + 1;
+
+            $chartQuery = RegPeriksa::whereBetween('tgl_registrasi', [$tgl_awal, $tgl_akhir])
+                ->where('stts', '!=', 'Batal')
+                ->selectRaw("tgl_registrasi, status_lanjut, COUNT(*) as total")
+                ->groupBy('tgl_registrasi', 'status_lanjut')
+                ->get();
+
+            $chartDataArr = [];
+            for ($i = 0; $i < $days; $i++) {
+                $date = $startDate->copy()->addDays($i)->toDateString();
+                $chartDataArr[$date] = [
+                    'date' => $date,
+                    'ralan' => 0,
+                    'ranap' => 0
+                ];
+            }
+
+            foreach ($chartQuery as $item) {
+                $date = $item->tgl_registrasi;
+                $sl = strtolower($item->status_lanjut);
+                if (isset($chartDataArr[$date])) {
+                    $chartDataArr[$date][$sl] = (int) $item->total;
+                }
+            }
+            $data['charts'] = array_values($chartDataArr);
+
             // Add inpatient care duration statistics if status is Ranap
             if ($status_lanjut === 'Ranap') {
                 // User DO:
