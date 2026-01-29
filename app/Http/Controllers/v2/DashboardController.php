@@ -888,6 +888,29 @@ class DashboardController extends Controller
                 'label' => $prevStartDate->format('d/m') . ' - ' . $prevEndDate->format('d/m')
             ];
 
+            // 11. Analisis Pasien Batal
+            $batalQuery = RegPeriksa::whereBetween('tgl_registrasi', [$tgl_awal, $tgl_akhir])
+                ->where('stts', 'Batal');
+
+            if ($status_lanjut && $status_lanjut !== 'all') {
+                $batalQuery->where('status_lanjut', $status_lanjut);
+            }
+
+            $data['batal'] = [
+                'total' => $batalQuery->count(),
+                'by_poli' => (clone $batalQuery)
+                    ->join('poliklinik', 'reg_periksa.kd_poli', '=', 'poliklinik.kd_poli')
+                    ->select('poliklinik.nm_poli as label', DB::raw('COUNT(*) as total'))
+                    ->groupBy('poliklinik.nm_poli')
+                    ->orderBy('total', 'desc')
+                    ->limit(5)
+                    ->get(),
+                'by_status' => (clone $batalQuery)
+                    ->select('status_lanjut as label', DB::raw('COUNT(*) as total'))
+                    ->groupBy('status_lanjut')
+                    ->get()
+            ];
+
             // Add inpatient care duration statistics if status is Ranap
             if ($status_lanjut === 'Ranap') {
                 // User DO:
