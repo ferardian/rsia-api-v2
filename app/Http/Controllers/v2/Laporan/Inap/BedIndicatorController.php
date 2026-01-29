@@ -22,12 +22,15 @@ class BedIndicatorController extends Controller
             $t = $start->diffInDays($end) + 1;
 
             // 1. A (Bed Count) - Get from log for the specific month/year
-            // If the range spans multiple months, we use the end date's month as the reference for total capacity
-            $bedLog = RsiaLogJumlahKamar::where('tahun', $end->format('Y'))
-                ->where('bulan', $end->format('m'))
+            // Use integer month to avoid leading zero issues ('01' vs '1' in database)
+            $tahun = $end->format('Y');
+            $bulan = $end->month;
+
+            $bedLog = RsiaLogJumlahKamar::where('tahun', $tahun)
+                ->where('bulan', $bulan)
                 ->sum('jumlah');
 
-            // Fallback to current bed count if log is empty
+            // Fallback for overall if log is empty
             if ($bedLog == 0) {
                 $bedLog = DB::table('kamar')->where('statusdata', '1')->count();
             }
@@ -53,10 +56,18 @@ class BedIndicatorController extends Controller
             $breakdown = [];
             foreach ($categories as $key => $cat) {
                 // Get bed count for this category from log
-                $A = RsiaLogJumlahKamar::where('tahun', $end->format('Y'))
-                    ->where('bulan', $end->format('m'))
+                $A = RsiaLogJumlahKamar::where('tahun', $tahun)
+                    ->where('bulan', $bulan)
                     ->where('kategori', $cat['log_category'])
                     ->sum('jumlah');
+                
+                // Fallback for category if log value is 0
+                if ($A == 0) {
+                    $A = DB::table('kamar')
+                        ->where('statusdata', '1')
+                        ->where('kd_kamar', 'like', '%' . $cat['keyword'] . '%')
+                        ->count();
+                }
 
                 // Get HP and D for this category using keyword in kd_kamar
                 $HP = KamarInap::whereBetween('tgl_keluar', [$tgl_awal, $tgl_akhir])
