@@ -831,6 +831,16 @@ class DashboardController extends Controller
             }
             $data['charts'] = array_values($chartDataArr);
 
+            // 8. Berdasarkan Domisili (Top 10 Kecamatan)
+            $data['domisili'] = (clone $baseQuery)
+                ->join('pasien', 'reg_periksa.no_rkm_medis', '=', 'pasien.no_rkm_medis')
+                ->join('kecamatan', 'pasien.kd_kec', '=', 'kecamatan.kd_kec')
+                ->select('kecamatan.nm_kec as label', DB::raw('COUNT(*) as total'))
+                ->groupBy('kecamatan.nm_kec')
+                ->orderBy('total', 'desc')
+                ->limit(10)
+                ->get();
+
             // Add inpatient care duration statistics if status is Ranap
             if ($status_lanjut === 'Ranap') {
                 // User DO:
