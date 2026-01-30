@@ -115,11 +115,12 @@ class BedIndicatorController extends Controller
         $A_all = $bedLog;
         $HP_all = KamarInap::whereBetween('tgl_keluar', [$tgl_awal, $tgl_akhir])
             ->where('tgl_keluar', '!=', '0000-00-00')
-            ->where('stts_pulang', '!=', 'Pindah Kamar')
+            ->where('kd_kamar', 'not like', '%BYA%')
             ->sum('lama');
         $D_all = KamarInap::whereBetween('tgl_keluar', [$tgl_awal, $tgl_akhir])
             ->where('tgl_keluar', '!=', '0000-00-00')
             ->where('stts_pulang', '!=', 'Pindah Kamar')
+            ->where('kd_kamar', 'not like', '%BYA%')
             ->distinct()
             ->count('no_rawat');
 
@@ -147,7 +148,6 @@ class BedIndicatorController extends Controller
 
             $HP = KamarInap::whereBetween('tgl_keluar', [$tgl_awal, $tgl_akhir])
                 ->where('tgl_keluar', '!=', '0000-00-00')
-                ->where('stts_pulang', '!=', 'Pindah Kamar')
                 ->where('kd_kamar', 'like', '%' . $cat['keyword'] . '%')
                 ->sum('lama');
 
