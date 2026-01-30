@@ -11,4 +11,5 @@ Route::prefix('laporan/penyakit')->group(function () {
 });
 Route::prefix('laporan/statistik')->group(function () {
     Route::get('ranap/indicators', [\App\Http\Controllers\v2\Laporan\Inap\BedIndicatorController::class, 'getIndicators']);
+    Route::get('ranap/indicators/yearly', [\App\Http\Controllers\v2\Laporan\Inap\BedIndicatorController::class, 'getYearlyIndicators']);
 });
