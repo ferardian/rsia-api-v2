@@ -23,11 +23,13 @@ class RsiaHelpdeskTicket extends Model
         'status',
         'nik_teknisi',
         'solusi',
+        'jam_mulai',
         'jam_selesai'
     ];
 
     protected $casts = [
         'tanggal' => 'datetime',
+        'jam_mulai' => 'datetime',
         'jam_selesai' => 'datetime',
     ];
 

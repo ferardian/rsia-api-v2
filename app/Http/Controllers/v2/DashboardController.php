@@ -543,10 +543,10 @@ class DashboardController extends Controller
                 ->get();
 
             if ($schedule->isEmpty()) {
-                return ApiResponse::success('No code blue schedule for today', [
-                    'pagi' => [],
-                    'siang' => [],
-                    'malam' => []
+                return ApiResponse::success('No code blue schedule for today', (object)[
+                    'pagi' => (object)[],
+                    'siang' => (object)[],
+                    'malam' => (object)[]
                 ]);
             }
 
@@ -600,10 +600,10 @@ class DashboardController extends Controller
                 ->get();
 
             if ($schedule->isEmpty()) {
-                return ApiResponse::success('No code blue schedule for this date', [
-                    'pagi' => [],
-                    'siang' => [],
-                    'malam' => []
+                return ApiResponse::success('No code blue schedule for this date', (object)[
+                    'pagi' => (object)[],
+                    'siang' => (object)[],
+                    'malam' => (object)[]
                 ]);
             }
 
