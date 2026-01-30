@@ -113,7 +113,7 @@ class BedIndicatorController extends Controller
         }
 
         $A_all = $bedLog;
-        $LD_all = KamarInap::whereBetween('tgl_keluar', [$tgl_awal, $tgl_akhir])
+        $HP_all = KamarInap::whereBetween('tgl_keluar', [$tgl_awal, $tgl_akhir])
             ->where('tgl_keluar', '!=', '0000-00-00')
             ->where('kd_kamar', 'not like', '%BYA%')
             ->sum('lama');
@@ -123,9 +123,6 @@ class BedIndicatorController extends Controller
             ->where('kd_kamar', 'not like', '%BYA%')
             ->distinct()
             ->count('no_rawat');
-        
-        // HP = LD + Count unique episodes (HP follows DO: LD + 1 per episode)
-        $HP_all = $LD_all + $D_all;
 
         $categories = [
             'Anak' => ['keyword' => 'Anak', 'log_category' => 'Anak'],
@@ -149,7 +146,7 @@ class BedIndicatorController extends Controller
                     ->count();
             }
 
-            $LD = KamarInap::whereBetween('tgl_keluar', [$tgl_awal, $tgl_akhir])
+            $HP = KamarInap::whereBetween('tgl_keluar', [$tgl_awal, $tgl_akhir])
                 ->where('tgl_keluar', '!=', '0000-00-00')
                 ->where('kd_kamar', 'like', '%' . $cat['keyword'] . '%')
                 ->sum('lama');
@@ -161,12 +158,9 @@ class BedIndicatorController extends Controller
                 ->distinct()
                 ->count('no_rawat');
 
-            // HP = LD + Count unique episodes
-            $HP = $LD + $D;
-
             $bor = ($A * $t) > 0 ? ($HP / ($A * $t)) * 100 : 0;
-            $avlos = $D > 0 ? $LD / $D : 0; // AVLOS uses LD
-            $toi = $D > 0 ? (($A * $t) - $HP) / $D : 0; // TOI uses HP
+            $avlos = $D > 0 ? $HP / $D : 0;
+            $toi = $D > 0 ? (($A * $t) - $HP) / $D : 0;
             $bto = $A > 0 ? $D / $A : 0;
 
             $breakdown[] = [
@@ -174,7 +168,6 @@ class BedIndicatorController extends Controller
                 'metrics' => [
                     'A' => (int)$A,
                     'HP' => (float)$HP,
-                    'LD' => (float)$LD,
                     'D' => (int)$D,
                 ],
                 'indicators' => [
@@ -187,8 +180,8 @@ class BedIndicatorController extends Controller
         }
 
         $bor_all = ($A_all * $t) > 0 ? ($HP_all / ($A_all * $t)) * 100 : 0;
-        $avlos_all = $D_all > 0 ? $LD_all / $D_all : 0; // AVLOS uses LD
-        $toi_all = $D_all > 0 ? (($A_all * $t) - $HP_all) / $D_all : 0; // TOI uses HP
+        $avlos_all = $D_all > 0 ? $HP_all / $D_all : 0;
+        $toi_all = $D_all > 0 ? (($A_all * $t) - $HP_all) / $D_all : 0;
         $bto_all = $A_all > 0 ? $D_all / $A_all : 0;
 
         return [
@@ -201,7 +194,6 @@ class BedIndicatorController extends Controller
                 'raw_metrics' => [
                     'A' => $A_all,
                     'HP' => (float)$HP_all,
-                    'LD' => (float)$LD_all,
                     'D' => $D_all,
                 ],
                 'indicators' => [
