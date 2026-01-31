@@ -38,8 +38,8 @@ class AppServiceProvider extends ServiceProvider
         \Carbon\Carbon::setLocale('id');
 
         // ========== FORCE HTTPS
-        if (str_contains(config('app.url'), 'https://')) {
-            \Illuminate\Support\Facades\URL::forceScheme('https');
+        if($this->app->environment('production')) {
+            $this->app['request']->server->set('HTTPS','on');
         }
 
         // ========== PASSPORT SCOPES

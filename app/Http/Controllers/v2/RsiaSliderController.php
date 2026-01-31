@@ -46,6 +46,10 @@ class RsiaSliderController extends Controller
 
             $image->move($destinationPath, $name);
             $imageUrl = url('/storage/slider/' . $name);
+            
+            if (str_contains(config('app.url'), 'https://')) {
+                $imageUrl = str_replace('http://', 'https://', $imageUrl);
+            }
 
             $slider = RsiaSlider::create([
                 'image'  => $imageUrl,
@@ -89,7 +93,13 @@ class RsiaSliderController extends Controller
             $name = time() . '_' . Str::slug($request->title ?? 'slider') . '.' . $image->getClientOriginalExtension();
             $destinationPath = public_path('/storage/slider');
             $image->move($destinationPath, $name);
-            $data['image'] = url('/storage/slider/' . $name);
+            
+            $imageUrl = url('/storage/slider/' . $name);
+            if (str_contains(config('app.url'), 'https://')) {
+                $imageUrl = str_replace('http://', 'https://', $imageUrl);
+            }
+
+            $data['image'] = $imageUrl;
         }
 
         $slider->update($data);
