@@ -60,11 +60,15 @@ class BedIndicatorController extends Controller
                 $metrics = $this->calculateMetrics($startOfMonth, $endOfMonth);
                 
                 $indicatorTarget = null;
+                $rawMetricsTarget = null;
+                
                 if ($kategori === 'Gabungan') {
                     $indicatorTarget = $metrics['overall']['indicators'];
+                    $rawMetricsTarget = $metrics['overall']['raw_metrics'];
                 } else {
                     $foundBreakdown = collect($metrics['breakdown'])->firstWhere('category', $kategori);
                     $indicatorTarget = $foundBreakdown ? $foundBreakdown['indicators'] : null;
+                    $rawMetricsTarget = $foundBreakdown ? $foundBreakdown['metrics'] : null;
                 }
 
                 $monthlyData[] = [
@@ -74,6 +78,9 @@ class BedIndicatorController extends Controller
                     'avlos' => $indicatorTarget ? $indicatorTarget['avlos'] : 0,
                     'toi' => $indicatorTarget ? $indicatorTarget['toi'] : 0,
                     'bto' => $indicatorTarget ? $indicatorTarget['bto'] : 0,
+                    'A' => $rawMetricsTarget ? $rawMetricsTarget['A'] : 0,
+                    'HP' => $rawMetricsTarget ? $rawMetricsTarget['HP'] : 0,
+                    'D' => $rawMetricsTarget ? $rawMetricsTarget['D'] : 0,
                 ];
             }
 
