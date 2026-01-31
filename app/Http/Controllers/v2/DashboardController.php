@@ -720,11 +720,21 @@ class DashboardController extends Controller
             }
             
             $status_lanjut = $request->status_lanjut; // 'Ralan', 'Ranap', or null for all
+            $kd_poli = $request->kd_poli;
+            $kd_dokter = $request->kd_dokter;
 
             $baseQuery = RegPeriksa::whereBetween('tgl_registrasi', [$tgl_awal, $tgl_akhir]);
             
             if ($status_lanjut && $status_lanjut !== 'all') {
                 $baseQuery->where('reg_periksa.status_lanjut', $status_lanjut);
+            }
+
+            if ($kd_poli && $kd_poli !== 'all') {
+                $baseQuery->where('reg_periksa.kd_poli', $kd_poli);
+            }
+
+            if ($kd_dokter && $kd_dokter !== 'all') {
+                $baseQuery->where('reg_periksa.kd_dokter', $kd_dokter);
             }
 
             // Tambahkan filter untuk mengecualikan status 'Batal'
@@ -893,6 +903,14 @@ class DashboardController extends Controller
 
             if ($status_lanjut && $status_lanjut !== 'all') {
                 $prevQuery->where('status_lanjut', $status_lanjut);
+            }
+
+            if ($kd_poli && $kd_poli !== 'all') {
+                $prevQuery->where('kd_poli', $kd_poli);
+            }
+
+            if ($kd_dokter && $kd_dokter !== 'all') {
+                $prevQuery->where('kd_dokter', $kd_dokter);
             }
 
             $prevTotal = $prevQuery->count();
