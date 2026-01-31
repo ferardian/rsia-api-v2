@@ -1017,6 +1017,18 @@ class DashboardController extends Controller
                 $data['monthly_breakdown'] = $monthlyBreakdown;
             }
 
+            // 13. Filter Lists (Poli & Dokter)
+            $data['poli_list'] = \App\Models\Poliklinik::where('status', '1')
+                ->select('kd_poli', 'nm_poli')
+                ->orderBy('nm_poli')
+                ->get();
+
+            $data['dokter_list'] = \App\Models\Dokter::where('status', '1')
+                ->with('spesialis:kd_sps,nm_sps')
+                ->select('kd_dokter', 'nm_dokter', 'kd_sps')
+                ->orderBy('nm_dokter')
+                ->get();
+
             return ApiResponse::success('Visit statistics retrieved successfully', $data);
         } catch (\Exception $e) {
             \Log::error('Dashboard Visit Stats Error: ' . $e->getMessage());
