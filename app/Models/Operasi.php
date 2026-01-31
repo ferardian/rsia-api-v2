@@ -312,4 +312,9 @@ class Operasi extends Model
     {
         return $this->belongsTo(Dokter::class, 'dokter_umum', 'kd_dokter')->select('kd_dokter', 'nm_dokter')->where('kd_dokter', '<>', '-');
     }
+
+    public function regPeriksa()
+    {
+        return $this->belongsTo(RegPeriksa::class, 'no_rawat', 'no_rawat');
+    }
 }

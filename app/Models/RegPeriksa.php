@@ -334,4 +334,9 @@ class RegPeriksa extends Model
         return $this->hasOne(NotaJalan::class, 'no_rawat', 'no_rawat')
             ->select('no_rawat', 'tanggal', 'jam');
     }
+
+    public function kamarInap()
+    {
+        return $this->hasMany(KamarInap::class, 'no_rawat', 'no_rawat');
+    }
 }

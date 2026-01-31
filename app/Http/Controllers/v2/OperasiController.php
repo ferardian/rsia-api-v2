@@ -12,6 +12,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use App\Traits\LogsToTracker;
 use App\Models\RsiaOperasiSafe;
+use App\Models\Operasi;
 use App\Models\Pegawai;
 
 class OperasiController extends Controller
@@ -169,7 +170,15 @@ class OperasiController extends Controller
             $limit = $request->input('limit', 15);
             $q = $request->input('q');
 
-            $query = RsiaOperasiSafe::with(['detailPaket', 'regPeriksa.pasien']);
+            $query = Operasi::with([
+                'detailPaket', 
+                'regPeriksa.pasien', 
+                'regPeriksa.caraBayar', 
+                'detailOperator1', 
+                'regPeriksa.kamarInap' => function($q) {
+                    $q->with(['kamar.bangsal'])->orderBy('tgl_masuk', 'desc')->orderBy('jam_masuk', 'desc');
+                }
+            ]);
 
             if ($q) {
                 $query->where(function ($query) use ($q) {
@@ -192,6 +201,38 @@ class OperasiController extends Controller
                 $query->whereBetween('tgl_operasi', [$request->start, $request->end]);
             }
 
+            if ($request->has('kd_pj') && !empty($request->kd_pj)) {
+                $query->whereHas('regPeriksa', function ($q) use ($request) {
+                    $q->where('kd_pj', $request->kd_pj);
+                });
+            }
+
+            if ($request->has('kode_paket') && !empty($request->kode_paket)) {
+                $query->where('kode_paket', $request->kode_paket);
+            }
+
+            if ($request->has('operator') && !empty($request->operator)) {
+                $query->where('operator1', $request->operator);
+            }
+
+            if ($request->has('jenis_tindakan') && !empty($request->jenis_tindakan)) {
+                $jt = $request->jenis_tindakan;
+                $query->whereHas('detailPaket', function ($sub) use ($jt) {
+                    if (str_contains($jt, 'SC') || str_contains($jt, 'Sectio')) {
+                        $sub->where('nm_perawatan', 'like', '%SC%')
+                            ->orWhere('nm_perawatan', 'like', '%Sectio%');
+                    } elseif (str_contains($jt, 'Curetage') || str_contains($jt, 'Kuret')) {
+                        $sub->where('nm_perawatan', 'like', '%Kuret%')
+                            ->orWhere('nm_perawatan', 'like', '%Curetage%');
+                    } else {
+                        $sub->where('nm_perawatan', 'not like', '%SC%')
+                            ->where('nm_perawatan', 'not like', '%Sectio%')
+                            ->where('nm_perawatan', 'not like', '%Kuret%')
+                            ->where('nm_perawatan', 'not like', '%Curetage%');
+                    }
+                });
+            }
+
             $data = $query->orderBy('tgl_operasi', 'desc')->paginate($limit);
 
             return response()->json([
@@ -207,24 +248,27 @@ class OperasiController extends Controller
 
     public function getLaporan(Request $request)
     {
-        $request->validate([
-            'no_rawat' => 'required',
-            'kode_paket' => 'required',
-            'tgl_operasi' => 'required' // Date portion
-        ]);
-
-        // Note: tgl_operasi in DB is datetime. 
-        // We might need to match generic date or exact datetime.
-        // Usually booking has date.
-        
-        $laporan = RsiaOperasiSafe::where('no_rawat', $request->no_rawat)
+        // Match exactly or loosely if datetime formatting varies
+        $laporan = RsiaOperasiSafe::withAllRelations()
+            ->where('no_rawat', $request->no_rawat)
             ->where('kode_paket', $request->kode_paket)
-             // Using whereDate if exact match isn't guaranteed, 
-             // but schema says PK is (no_rawat, tgl_operasi, kode_paket).
-             // Let's assume frontend sends exact datetime or we match by date.
-             // Ideally we match exact datetime if it comes from booking.
-            ->whereDate('tgl_operasi', $request->tgl_operasi) 
+            ->where(function($q) use ($request) {
+                $q->where('tgl_operasi', $request->tgl_operasi)
+                  ->orWhereDate('tgl_operasi', date('Y-m-d', strtotime($request->tgl_operasi)));
+            })
             ->first();
+
+        // If not found in Safe, check if there's at least the basic record
+        if (!$laporan) {
+             $laporan = Operasi::with(['detailPaket', 'regPeriksa.pasien', 'regPeriksa.diagnosaPasien.penyakit', 'detailOperator1', 'laporan', 'detailOperator2', 'detailAsistenOperator1', 'detailAsistenOperator2', 'detailDokterAnestesi', 'detailAsistenAnestesi', 'detailOperator3', 'detailDokterAnak', 'detailPerawatResusitas', 'detailBidan', 'detailOmloop'])
+                ->where('no_rawat', $request->no_rawat)
+                ->where('kode_paket', $request->kode_paket)
+                ->where(function($q) use ($request) {
+                    $q->where('tgl_operasi', $request->tgl_operasi)
+                      ->orWhereDate('tgl_operasi', date('Y-m-d', strtotime($request->tgl_operasi)));
+                })
+                ->first();
+        }
 
         return response()->json([
             'success' => true,
@@ -374,5 +418,11 @@ class OperasiController extends Controller
                 'message' => 'Gagal menghapus laporan: ' . $e->getMessage()
             ], 500);
         }
+    }
+
+    public function getPenjab()
+    {
+        $data = \App\Models\Penjab::where('status', '1')->select('kd_pj', 'png_jawab')->get();
+        return response()->json(['success' => true, 'data' => $data]);
     }
 }

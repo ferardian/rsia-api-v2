@@ -171,7 +171,7 @@ class KamarInap extends Model
      */
     public function kamar()
     {
-        return $this->belongsTo(\App\Models\Kamar::class, 'kd_kamar', 'kd_kamar')->select("kd_kamar", 'kd_bangsal', 'status');
+        return $this->belongsTo(\App\Models\Kamar::class, 'kd_kamar', 'kd_kamar')->select("kd_kamar", 'kd_bangsal', 'status', 'kelas');
     }
 
     /**
