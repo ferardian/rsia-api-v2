@@ -870,11 +870,19 @@ class DashboardController extends Controller
                 ->get();
 
             // 10. Perbandingan Tren (Period-over-Period)
-            $durationArr = $startDate->diff($endDate);
-            $daysCount = $durationArr->days + 1;
-            
-            $prevEndDate = $startDate->copy()->subDay();
-            $prevStartDate = $prevEndDate->copy()->subDays($daysCount - 1);
+            if ($mode === 'tahunan') {
+                // For yearly mode: compare with previous year
+                $prevYear = $tahun - 1;
+                $prevStartDate = Carbon::parse("$prevYear-01-01");
+                $prevEndDate = Carbon::parse("$prevYear-12-31");
+            } else {
+                // For daily mode: compare with previous period of same duration
+                $durationArr = $startDate->diff($endDate);
+                $daysCount = $durationArr->days + 1;
+                
+                $prevEndDate = $startDate->copy()->subDay();
+                $prevStartDate = $prevEndDate->copy()->subDays($daysCount - 1);
+            }
 
             $currentTotal = $baseQuery->count();
             
