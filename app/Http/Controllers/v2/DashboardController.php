@@ -705,8 +705,28 @@ class DashboardController extends Controller
     public function getVisitStats(Request $request)
     {
         try {
-            $tgl_awal = $request->tgl_awal ?? Carbon::today()->toDateString();
-            $tgl_akhir = $request->tgl_akhir ?? Carbon::today()->toDateString();
+            // Support for yearly and daily modes
+            $mode = $request->mode ?? 'harian';
+            
+            \Log::info('📊 Dashboard Visit Stats Request', [
+                'mode' => $mode,
+                'tahun' => $request->tahun,
+                'tgl_awal' => $request->tgl_awal,
+                'tgl_akhir' => $request->tgl_akhir,
+                'status_lanjut' => $request->status_lanjut
+            ]);
+            
+            if ($mode === 'tahunan') {
+                // Yearly mode: calculate date range from year
+                $tahun = $request->tahun ?? Carbon::now()->year;
+                $tgl_awal = "$tahun-01-01";
+                $tgl_akhir = "$tahun-12-31";
+            } else {
+                // Daily mode: use provided date range
+                $tgl_awal = $request->tgl_awal ?? Carbon::today()->toDateString();
+                $tgl_akhir = $request->tgl_akhir ?? Carbon::today()->toDateString();
+            }
+            
             $status_lanjut = $request->status_lanjut; // 'Ralan', 'Ranap', or null for all
 
             $baseQuery = RegPeriksa::whereBetween('tgl_registrasi', [$tgl_awal, $tgl_akhir]);
@@ -947,6 +967,39 @@ class DashboardController extends Controller
                     'total_pasien' => (int) ($careDuration->total_pasien ?? 0),
                     'avg_lama_dirawat' => round($careDuration->alos ?? 0, 1)
                 ];
+            }
+
+            // 12. Monthly Breakdown for Yearly Mode
+            if ($mode === 'tahunan') {
+                \Log::info('🔍 Generating monthly breakdown for year: ' . ($tahun ?? 'unknown'));
+                
+                $monthlyQuery = (clone $baseQuery)
+                    ->selectRaw('MONTH(tgl_registrasi) as bulan, COUNT(*) as total')
+                    ->groupBy('bulan')
+                    ->orderBy('bulan')
+                    ->get();
+
+                \Log::info('🔍 Monthly query results: ' . $monthlyQuery->toJson());
+
+                // Fill in all 12 months with 0 if no data
+                $monthlyBreakdown = [];
+                $monthNames = [
+                    1 => 'Januari', 2 => 'Februari', 3 => 'Maret', 4 => 'April',
+                    5 => 'Mei', 6 => 'Juni', 7 => 'Juli', 8 => 'Agustus',
+                    9 => 'September', 10 => 'Oktober', 11 => 'November', 12 => 'Desember'
+                ];
+
+                for ($i = 1; $i <= 12; $i++) {
+                    $found = $monthlyQuery->firstWhere('bulan', $i);
+                    $monthlyBreakdown[] = [
+                        'bulan' => $i,
+                        'nama_bulan' => $monthNames[$i],
+                        'total' => $found ? (int) $found->total : 0
+                    ];
+                }
+
+                $data['monthly_breakdown'] = $monthlyBreakdown;
+                \Log::info('🔍 Monthly breakdown added to response: ' . count($monthlyBreakdown) . ' months');
             }
 
             return ApiResponse::success('Visit statistics retrieved successfully', $data);
