@@ -47,7 +47,7 @@ class RsiaSliderController extends Controller
             $image->move($destinationPath, $name);
             $imageUrl = url('/storage/slider/' . $name);
             
-            if (str_contains(config('app.url'), 'https://')) {
+            if (!str_contains($imageUrl, 'localhost')) {
                 $imageUrl = str_replace('http://', 'https://', $imageUrl);
             }
 
@@ -95,7 +95,7 @@ class RsiaSliderController extends Controller
             $image->move($destinationPath, $name);
             
             $imageUrl = url('/storage/slider/' . $name);
-            if (str_contains(config('app.url'), 'https://')) {
+            if (!str_contains($imageUrl, 'localhost')) {
                 $imageUrl = str_replace('http://', 'https://', $imageUrl);
             }
 
