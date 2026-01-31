@@ -45,7 +45,7 @@ class RsiaSliderController extends Controller
             }
 
             $image->move($destinationPath, $name);
-            $imageUrl = $request->getSchemeAndHttpHost() . '/storage/slider/' . $name;
+            $imageUrl = url('/storage/slider/' . $name);
 
             $slider = RsiaSlider::create([
                 'image'  => $imageUrl,
@@ -89,7 +89,7 @@ class RsiaSliderController extends Controller
             $name = time() . '_' . Str::slug($request->title ?? 'slider') . '.' . $image->getClientOriginalExtension();
             $destinationPath = public_path('/storage/slider');
             $image->move($destinationPath, $name);
-            $data['image'] = $request->getSchemeAndHttpHost() . '/storage/slider/' . $name;
+            $data['image'] = url('/storage/slider/' . $name);
         }
 
         $slider->update($data);
