@@ -5,7 +5,7 @@ use App\Http\Controllers\v2\RsiaArticleController;
 
 Route::get('/article', [RsiaArticleController::class, 'index']);
 
-Route::middleware('jwt.verify')->group(function () {
+Route::middleware('claim:role,pegawai')->group(function () {
     Route::get('/article/get', [RsiaArticleController::class, 'get']);
     Route::post('/article/store', [RsiaArticleController::class, 'store']);
     Route::post('/article/update/{id}', [RsiaArticleController::class, 'update']);
