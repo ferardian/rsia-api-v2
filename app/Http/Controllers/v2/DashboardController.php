@@ -708,14 +708,6 @@ class DashboardController extends Controller
             // Support for yearly and daily modes
             $mode = $request->mode ?? 'harian';
             
-            \Log::info('📊 Dashboard Visit Stats Request', [
-                'mode' => $mode,
-                'tahun' => $request->tahun,
-                'tgl_awal' => $request->tgl_awal,
-                'tgl_akhir' => $request->tgl_akhir,
-                'status_lanjut' => $request->status_lanjut
-            ]);
-            
             if ($mode === 'tahunan') {
                 // Yearly mode: calculate date range from year
                 $tahun = $request->tahun ?? Carbon::now()->year;
@@ -905,7 +897,9 @@ class DashboardController extends Controller
                 'previous' => $prevTotal,
                 'diff' => $diff,
                 'percent' => round($percent, 1),
-                'label' => $prevStartDate->format('d/m') . ' - ' . $prevEndDate->format('d/m')
+                'label' => $mode === 'tahunan' 
+                    ? $prevStartDate->format('Y') 
+                    : $prevStartDate->format('d/m') . ' - ' . $prevEndDate->format('d/m')
             ];
 
             // 11. Analisis Pasien Batal
@@ -971,15 +965,11 @@ class DashboardController extends Controller
 
             // 12. Monthly Breakdown for Yearly Mode
             if ($mode === 'tahunan') {
-                \Log::info('🔍 Generating monthly breakdown for year: ' . ($tahun ?? 'unknown'));
-                
                 $monthlyQuery = (clone $baseQuery)
                     ->selectRaw('MONTH(tgl_registrasi) as bulan, COUNT(*) as total')
                     ->groupBy('bulan')
                     ->orderBy('bulan')
                     ->get();
-
-                \Log::info('🔍 Monthly query results: ' . $monthlyQuery->toJson());
 
                 // Fill in all 12 months with 0 if no data
                 $monthlyBreakdown = [];
@@ -999,7 +989,6 @@ class DashboardController extends Controller
                 }
 
                 $data['monthly_breakdown'] = $monthlyBreakdown;
-                \Log::info('🔍 Monthly breakdown added to response: ' . count($monthlyBreakdown) . ' months');
             }
 
             return ApiResponse::success('Visit statistics retrieved successfully', $data);
