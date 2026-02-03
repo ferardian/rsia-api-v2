@@ -14,28 +14,16 @@ use Illuminate\Support\Facades\Log;
 
 class AntrianPoliController extends Controller
 {
-    /**
-     * Get queue volume summary for the next 7 days for all active clinics.
-     *
-     * @return \Illuminate\Http\Response
-     */
     public function antrianSummary()
     {
         try {
             // 1. Get current date and next 6 days
             $startDate = Carbon::today();
-            $endDate = Carbon::today()->addDays(6);
-
-            // 2. Get active clinics (excluding internal ones or inactive ones)
-            $clinics = Poliklinik::where('status', '1')
-                ->where('kd_poli', '!=', '-')
-                ->orderBy('nm_poli')
-                ->get(['kd_poli', 'nm_poli']);
-
-            Log::info('AntrianPoliController: Found ' . $clinics->count() . ' active clinics.');
-
-            // 3. Prepare result structure
-            $results = [];
+            
+            // 2. Define specific clinics (Kandungan & Anak)
+            $targetClinics = ['P001', 'P003', 'P007', 'P008', 'P009'];
+            
+            // 3. Prepare day mapping for database (WBI/SIMRS compatible)
             $indonesianDays = [
                 'Sunday' => 'MINGGU',
                 'Monday' => 'SENIN',
@@ -46,48 +34,71 @@ class AntrianPoliController extends Controller
                 'Saturday' => 'SABTU'
             ];
 
-            foreach ($clinics as $clinic) {
-                $clinicData = [
-                    'kd_poli' => $clinic->kd_poli,
-                    'nm_poli' => $clinic->nm_poli,
-                    'days' => []
+            $results = [];
+
+            for ($i = 0; $i < 7; $i++) {
+                $currentDate = $startDate->copy()->addDays($i);
+                $dateString = $currentDate->format('Y-m-d');
+                $englishDay = $currentDate->format('l');
+                $dayName = $indonesianDays[$englishDay];
+
+                $dayEntry = [
+                    'tanggal' => $dateString,
+                    'hari' => $dayName,
+                    'poliklinik' => []
                 ];
 
-                for ($i = 0; $i < 7; $i++) {
-                    $currentDate = $startDate->copy()->addDays($i);
-                    $dateString = $currentDate->format('Y-m-d');
-                    // Force using English Day name as key for our mapping
-                    $englishDay = $currentDate->format('l');
-                    $dayName = $indonesianDays[$englishDay];
+                // Get clinics that have schedules on this day among our target clinics
+                $clinicsWithSchedule = Poliklinik::whereIn('kd_poli', $targetClinics)
+                    ->whereHas('jadwal', function($q) use ($dayName) {
+                        $q->where('hari_kerja', $dayName);
+                    })
+                    ->orderBy('nm_poli')
+                    ->get(['kd_poli', 'nm_poli']);
 
-                    // Get total quota from jadwal for this clinic AND this specific day
-                    $totalQuota = JadwalPoli::where('kd_poli', $clinic->kd_poli)
-                        ->where('hari_kerja', $dayName)
-                        ->sum('kuota');
-
-                    // Get current registration count for this date
-                    $currentReg = RegPeriksa::where('kd_poli', $clinic->kd_poli)
-                        ->where('tgl_registrasi', $dateString)
-                        ->whereNotIn('stts', ['Batal'])
-                        ->count();
-
-                    $clinicData['days'][] = [
-                        'tanggal' => $dateString,
-                        'hari' => $indonesianDays[$englishDay], // Keep it consistent
-                        'kuota' => (int)$totalQuota,
-                        'terisi' => $currentReg,
-                        'tersedia' => max(0, (int)$totalQuota - $currentReg)
+                foreach ($clinicsWithSchedule as $clinic) {
+                    $clinicEntry = [
+                        'kd_poli' => $clinic->kd_poli,
+                        'nm_poli' => $clinic->nm_poli,
+                        'doctors' => []
                     ];
+
+                    // Get doctors and their quotas for this clinic and day
+                    $schedules = JadwalPoli::with('dokter:kd_dokter,nm_dokter')
+                        ->where('kd_poli', $clinic->kd_poli)
+                        ->where('hari_kerja', $dayName)
+                        ->get(['kd_dokter', 'kuota']);
+
+                    foreach ($schedules as $schedule) {
+                        // Count registrations for this doctor, clinic, and date
+                        $currentReg = RegPeriksa::where('kd_poli', $clinic->kd_poli)
+                            ->where('kd_dokter', $schedule->kd_dokter)
+                            ->where('tgl_registrasi', $dateString)
+                            ->whereNotIn('stts', ['Batal'])
+                            ->count();
+
+                        $clinicEntry['doctors'][] = [
+                            'kd_dokter' => $schedule->kd_dokter,
+                            'nm_dokter' => $schedule->dokter->nm_dokter ?? 'Dokter Belum Ditentukan',
+                            'kuota' => (int)$schedule->kuota,
+                            'terisi' => $currentReg,
+                            'tersedia' => max(0, (int)$schedule->kuota - $currentReg)
+                        ];
+                    }
+
+                    if (!empty($clinicEntry['doctors'])) {
+                        $dayEntry['poliklinik'][] = $clinicEntry;
+                    }
                 }
 
-                $results[] = $clinicData;
+                $results[] = $dayEntry;
             }
 
-            Log::info('AntrianPoliController: Successfully generated ' . count($results) . ' clinic summaries.');
+            Log::info('AntrianPoliController: Successfully generated 7-day refined summary.');
 
             return ApiResponse::successWithData($results, 'Data antrian berhasil diambil');
         } catch (\Exception $e) {
-            Log::error('AntrianPoliController Error: ' . $e->getMessage());
+            Log::error('AntrianPoliController Error: ' . $e->getMessage() . ' at ' . $e->getFile() . ':' . $e->getLine());
             return ApiResponse::error('Gagal mengambil data antrian: ' . $e->getMessage(), 'exception', null, 500);
         }
     }
