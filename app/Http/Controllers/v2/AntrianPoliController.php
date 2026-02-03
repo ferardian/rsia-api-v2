@@ -67,7 +67,7 @@ class AntrianPoliController extends Controller
                     $schedules = JadwalPoli::with('dokter:kd_dokter,nm_dokter')
                         ->where('kd_poli', $clinic->kd_poli)
                         ->where('hari_kerja', $dayName)
-                        ->get(['kd_dokter', 'kuota']);
+                        ->get(['kd_dokter', 'kuota', 'jam_mulai', 'jam_selesai']);
 
                     foreach ($schedules as $schedule) {
                         // Count registrations for this doctor, clinic, and date
@@ -80,6 +80,8 @@ class AntrianPoliController extends Controller
                         $clinicEntry['doctors'][] = [
                             'kd_dokter' => $schedule->kd_dokter,
                             'nm_dokter' => $schedule->dokter->nm_dokter ?? 'Dokter Belum Ditentukan',
+                            'jam_mulai' => $schedule->jam_mulai,
+                            'jam_selesai' => $schedule->jam_selesai,
                             'kuota' => (int)$schedule->kuota,
                             'terisi' => $currentReg,
                             'tersedia' => max(0, (int)$schedule->kuota - $currentReg)
