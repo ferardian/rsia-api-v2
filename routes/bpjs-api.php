@@ -31,6 +31,7 @@ Route::group(['middleware' => ['auth:aes']], function () {
 
     // BPJS Antrol (Antrian Online)
     Route::get('/bpjs/antrol/pendaftaran/tanggal/{tanggal}', [\App\Http\Controllers\v2\BpjsAntrolController::class, 'getPendaftaranByTanggal']);
+    Route::get('/bpjs/antrol/pendaftaran/range/{tglAwal}/{tglAkhir}', [\App\Http\Controllers\v2\BpjsAntrolController::class, 'getPendaftaranByRange']);
     Route::get('/bpjs/antrol/dashboard', [\App\Http\Controllers\v2\BpjsAntrolController::class, 'getDashboardByTanggal']);
     Route::post('/bpjs/antrol/antrean/getlisttask', [\App\Http\Controllers\v2\BpjsAntrolController::class, 'getListTask']);
     Route::post('/bpjs/antrol/antrean/sync', [\App\Http\Controllers\v2\BpjsAntrolController::class, 'syncTask']);
@@ -38,4 +39,5 @@ Route::group(['middleware' => ['auth:aes']], function () {
     Route::post('/bpjs/antrol/antrean/update-local', [\App\Http\Controllers\v2\BpjsAntrolController::class, 'updateLocalTask']);
     Route::post('/bpjs/antrol/antrean/sync-queue', [\App\Http\Controllers\v2\BpjsAntrolController::class, 'syncTaskQueue']);
     Route::get('/bpjs/antrol/sep/count/{tanggal}', [\App\Http\Controllers\v2\BpjsAntrolController::class, 'getSepCount']);
+    Route::get('/bpjs/antrol/sep/range/{tglAwal}/{tglAkhir}', [\App\Http\Controllers\v2\BpjsAntrolController::class, 'getSepCountByRange']);
 });

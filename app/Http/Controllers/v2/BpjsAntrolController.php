@@ -94,6 +94,80 @@ class BpjsAntrolController extends Controller
     }
 
     /**
+     * Get queue registration list by date range
+     * 
+     * @param string $tglAwal Format Y-m-d
+     * @param string $tglAkhir Format Y-m-d
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getPendaftaranByRange($tglAwal, $tglAkhir)
+    {
+        $startDate = new \DateTime($tglAwal);
+        $endDate = new \DateTime($tglAkhir);
+        $interval = new \DateInterval('P1D');
+        $dateRange = new \DatePeriod($startDate, $interval, $endDate->modify('+1 day'));
+
+        $allPendaftaran = [];
+        $metadata = ['code' => 200, 'message' => 'OK'];
+
+        foreach ($dateRange as $date) {
+            $currentDate = $date->format('Y-m-d');
+            $endpoint = "/antrean/pendaftaran/tanggal/" . $currentDate;
+            $response = $this->antrolService->get($endpoint);
+
+            if (isset($response['response']) && is_array($response['response'])) {
+                foreach ($response['response'] as $item) {
+                    $item['nama_pasien'] = '-';
+                    $item['nama_dokter'] = '-';
+
+                    $ref = \App\Models\ReferensiMobilejknBpjs::where('nobooking', $item['kodebooking'])->first();
+                    if ($ref) {
+                        $reg = \App\Models\RegPeriksa::where('no_rawat', $ref->no_rawat)
+                            ->with(['pasien', 'dokter'])
+                            ->first();
+                        if ($reg) {
+                            $item['nama_pasien'] = $reg->pasien->nm_pasien ?? '-';
+                            $item['nama_dokter'] = $reg->dokter->nm_dokter ?? '-';
+                        }
+                    }
+
+                    if ($item['nama_pasien'] == '-' && !empty($item['nopeserta'])) {
+                        $pasien = \App\Models\Pasien::where('no_kartu', $item['nopeserta'])->first();
+                        if ($pasien) {
+                             $item['nama_pasien'] = $pasien->nm_pasien;
+                             $reg = \App\Models\RegPeriksa::where('no_rkm_medis', $pasien->no_rkm_medis)
+                                ->where('tgl_registrasi', $currentDate)
+                                ->with('dokter')
+                                ->first();
+                             if ($reg) $item['nama_dokter'] = $reg->dokter->nm_dokter ?? '-';
+                        }
+                    }
+
+                    if ($item['nama_pasien'] == '-' && !empty($item['norekammedis'])) {
+                        $pasien = \App\Models\Pasien::where('no_rkm_medis', $item['norekammedis'])->first();
+                        if ($pasien) {
+                            $item['nama_pasien'] = $pasien->nm_pasien;
+                            $reg = \App\Models\RegPeriksa::where('no_rkm_medis', $pasien->no_rkm_medis)
+                                ->where('tgl_registrasi', $currentDate)
+                                ->with('dokter')
+                                ->first();
+                            if ($reg) $item['nama_dokter'] = $reg->dokter->nm_dokter ?? '-';
+                        }
+                    }
+                    $allPendaftaran[] = $item;
+                }
+            } else if (isset($response['metadata']) && $response['metadata']['code'] != 200 && $response['metadata']['code'] != 201) {
+                $metadata = $response['metadata'];
+            }
+        }
+
+        return response()->json([
+            'metadata' => $metadata,
+            'response' => $allPendaftaran
+        ]);
+    }
+
+    /**
      * Get dashboard data by date
      * useful for general monitoring
      * 
@@ -449,6 +523,27 @@ class BpjsAntrolController extends Controller
     public function getSepCount($tanggal)
     {
         $seps = \App\Models\BridgingSep::where('tglsep', $tanggal)
+            ->where('jnspelayanan', '2') // Rawat Jalan
+            ->where('kdpolitujuan', '<>', 'IGD')
+            ->select('no_kartu', 'nama_pasien', 'no_sep', 'no_rawat')
+            ->get();
+
+        return response()->json([
+            'metadata' => ['code' => 200, 'message' => 'OK'],
+            'response' => $seps
+        ]);
+    }
+
+    /**
+     * Get Outpatient SEP list (excluding IGD) for a given date range
+     * 
+     * @param string $tglAwal Format Y-m-d
+     * @param string $tglAkhir Format Y-m-d
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getSepCountByRange($tglAwal, $tglAkhir)
+    {
+        $seps = \App\Models\BridgingSep::whereBetween('tglsep', [$tglAwal, $tglAkhir])
             ->where('jnspelayanan', '2') // Rawat Jalan
             ->where('kdpolitujuan', '<>', 'IGD')
             ->select('no_kartu', 'nama_pasien', 'no_sep', 'no_rawat')
