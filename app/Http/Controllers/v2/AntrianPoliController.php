@@ -33,6 +33,15 @@ class AntrianPoliController extends Controller
 
             // 3. Prepare result structure
             $results = [];
+            $indonesianDays = [
+                'Sunday' => 'MINGGU',
+                'Monday' => 'SENIN',
+                'Tuesday' => 'SELASA',
+                'Wednesday' => 'RABU',
+                'Thursday' => 'KAMIS',
+                'Friday' => 'JUMAT',
+                'Saturday' => 'SABTU'
+            ];
 
             foreach ($clinics as $clinic) {
                 $clinicData = [
@@ -44,7 +53,9 @@ class AntrianPoliController extends Controller
                 for ($i = 0; $i < 7; $i++) {
                     $currentDate = $startDate->copy()->addDays($i);
                     $dateString = $currentDate->format('Y-m-d');
-                    $dayName = strtoupper($currentDate->translatedFormat('l'));
+                    // Force using English Day name as key for our mapping
+                    $englishDay = $currentDate->format('l');
+                    $dayName = $indonesianDays[$englishDay];
 
                     // Get total quota from jadwal for this clinic AND this specific day
                     $totalQuota = JadwalPoli::where('kd_poli', $clinic->kd_poli)
@@ -59,7 +70,7 @@ class AntrianPoliController extends Controller
 
                     $clinicData['days'][] = [
                         'tanggal' => $dateString,
-                        'hari' => $currentDate->translatedFormat('l'),
+                        'hari' => $indonesianDays[$englishDay], // Keep it consistent
                         'kuota' => (int)$totalQuota,
                         'terisi' => $currentReg,
                         'tersedia' => max(0, (int)$totalQuota - $currentReg)
