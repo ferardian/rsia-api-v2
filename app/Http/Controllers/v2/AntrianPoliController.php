@@ -1,0 +1,77 @@
+<?php
+
+namespace App\Http\Controllers\v2;
+
+use App\Http\Controllers\Controller;
+use App\Helpers\ApiResponse;
+use App\Models\Poliklinik;
+use App\Models\RegPeriksa;
+use App\Models\JadwalPoli;
+use Carbon\Carbon;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+
+class AntrianPoliController extends Controller
+{
+    /**
+     * Get queue volume summary for the next 7 days for all active clinics.
+     *
+     * @return \Illuminate\Http\Response
+     */
+    public function antrianSummary()
+    {
+        try {
+            // 1. Get current date and next 6 days
+            $startDate = Carbon::today();
+            $endDate = Carbon::today()->addDays(6);
+
+            // 2. Get active clinics (excluding internal ones or inactive ones)
+            $clinics = Poliklinik::where('status', '1')
+                ->where('kd_poli', '!=', '-')
+                ->orderBy('nm_poli')
+                ->get(['kd_poli', 'nm_poli']);
+
+            // 3. Prepare result structure
+            $results = [];
+
+            foreach ($clinics as $clinic) {
+                $clinicData = [
+                    'kd_poli' => $clinic->kd_poli,
+                    'nm_poli' => $clinic->nm_poli,
+                    'days' => []
+                ];
+
+                for ($i = 0; $i < 7; $i++) {
+                    $currentDate = $startDate->copy()->addDays($i);
+                    $dateString = $currentDate->format('Y-m-d');
+                    $dayName = strtoupper($currentDate->translatedFormat('l'));
+
+                    // Get total quota from jadwal for this clinic AND this specific day
+                    $totalQuota = JadwalPoli::where('kd_poli', $clinic->kd_poli)
+                        ->where('hari_kerja', $dayName)
+                        ->sum('kuota');
+
+                    // Get current registration count for this date
+                    $currentReg = RegPeriksa::where('kd_poli', $clinic->kd_poli)
+                        ->where('tgl_registrasi', $dateString)
+                        ->whereNotIn('stts', ['Batal'])
+                        ->count();
+
+                    $clinicData['days'][] = [
+                        'tanggal' => $dateString,
+                        'hari' => $currentDate->translatedFormat('l'),
+                        'kuota' => (int)$totalQuota,
+                        'terisi' => $currentReg,
+                        'tersedia' => max(0, (int)$totalQuota - $currentReg)
+                    ];
+                }
+
+                $results[] = $clinicData;
+            }
+
+            return ApiResponse::success($results);
+        } catch (\Exception $e) {
+            return ApiResponse::error('Gagal mengambil data antrian: ' . $e->getMessage(), 'exception', null, 500);
+        }
+    }
+}
