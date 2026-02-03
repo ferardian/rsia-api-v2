@@ -156,9 +156,20 @@ class BpjsAntrolController extends Controller
                     }
                     $allPendaftaran[] = $item;
                 }
-            } else if (isset($response['metadata']) && $response['metadata']['code'] != 200 && $response['metadata']['code'] != 201) {
-                $metadata = $response['metadata'];
+            } else if (isset($response['metadata'])) {
+                $code = $response['metadata']['code'];
+                // Only consider it a range-blocking error if it's not 200/201/204
+                if ($code != 200 && $code != 201 && $code != 204) {
+                    $metadata = $response['metadata'];
+                }
+            } else {
+                \Illuminate\Support\Facades\Log::warning("No data for $currentDate. Metadata might be missing.");
             }
+        }
+        
+        // If we have aggregated data, ensure metadata is 200
+        if (count($allPendaftaran) > 0) {
+            $metadata = ['code' => 200, 'message' => 'OK'];
         }
 
         return response()->json([
@@ -255,8 +266,12 @@ class BpjsAntrolController extends Controller
             $tasksToSync[4] = $estimasi->jam_periksa;
         }
 
-        // Check Resep Obat
-        $resep = \App\Models\ResepObat::where('no_rawat', $no_rawat)->first();
+        // Check Resep Obat - Pick the one with valid prescription date/time
+        $resep = \App\Models\ResepObat::where('no_rawat', $no_rawat)
+            ->where('tgl_peresepan', '!=', '0000-00-00')
+            ->orderBy('no_resep', 'desc')
+            ->first();
+
         if ($resep) {
             // If prescription exists: 5 (peresepan), 6 (farmasi/jam), 7 (penyerahan)
             if ($resep->tgl_peresepan && $resep->jam_peresepan) {
@@ -315,7 +330,10 @@ class BpjsAntrolController extends Controller
         $pemeriksaan = \App\Models\PemeriksaanRalan::where('no_rawat', $no_rawat)->first();
         $estimasi = \Illuminate\Support\Facades\DB::table('rsia_estimasi_poli')->where('no_rawat', $no_rawat)->first();
         $selesai = \Illuminate\Support\Facades\DB::table('rsia_selesai_poli')->where('no_rawat', $no_rawat)->first();
-        $resep = \App\Models\ResepObat::where('no_rawat', $no_rawat)->orderBy('no_resep', 'desc')->first();
+        $resep = \App\Models\ResepObat::where('no_rawat', $no_rawat)
+            ->where('tgl_peresepan', '!=', '0000-00-00')
+            ->orderBy('no_resep', 'desc')
+            ->first();
 
         $reg = \App\Models\RegPeriksa::where('no_rawat', $no_rawat)->first();
         $nama_pasien = '-';
@@ -463,7 +481,10 @@ class BpjsAntrolController extends Controller
             }
             
             // Task 5: Selesai Pemeriksaan / Peresepan
-            $task5Resep = \App\Models\ResepObat::where('no_rawat', $no_rawat)->first();
+            $task5Resep = \App\Models\ResepObat::where('no_rawat', $no_rawat)
+                ->where('tgl_peresepan', '!=', '0000-00-00')
+                ->orderBy('no_resep', 'desc')
+                ->first();
             if ($task5Resep) {
                 $waktu5 = strtotime($task5Resep->tgl_peresepan . ' ' . $task5Resep->jam_peresepan) * 1000;
             } else {
@@ -484,7 +505,10 @@ class BpjsAntrolController extends Controller
             // Only sync tasks 6-7 if prescription exists
             if ($hasResep) {
                 // Task 6: Racik Obat
-                $task6 = \App\Models\ResepObat::where('no_rawat', $no_rawat)->first();
+                $task6 = \App\Models\ResepObat::where('no_rawat', $no_rawat)
+                    ->where('tgl_peresepan', '!=', '0000-00-00')
+                    ->orderBy('no_resep', 'desc')
+                    ->first();
                 if ($task6 && $task6->tgl_perawatan && $task6->jam) {
                     $waktu6 = strtotime($task6->tgl_perawatan . ' ' . $task6->jam) * 1000;
                     $res6 = $this->antrolService->post("/antrean/updatewaktu", [

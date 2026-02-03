@@ -361,6 +361,89 @@ class CutiPegawaiController extends Controller
     }
 
     /**
+     * Get summary of leave usage per semester for all active staff
+     */
+    public function rekapCuti(Request $request)
+    {
+        $year = $request->year ?? date('Y');
+        $id_jenis = $request->id_jenis ?? 1; // Default: Cuti Tahunan
+
+        if ($id_jenis == 1) {
+            // Summary mode for Cuti Tahunan
+            $cutiSub = \Illuminate\Support\Facades\DB::table('rsia_cuti')
+                ->whereYear('tanggal_cuti', $year)
+                ->where('id_jenis', '1')
+                ->where('status_cuti', '2')
+                ->select(
+                    'id_pegawai',
+                    \Illuminate\Support\Facades\DB::raw('SUM(CASE WHEN MONTH(tanggal_cuti) <= 6 THEN 1 ELSE 0 END) as s1_took'),
+                    \Illuminate\Support\Facades\DB::raw('SUM(CASE WHEN MONTH(tanggal_cuti) > 6 THEN 1 ELSE 0 END) as s2_took')
+                )
+                ->groupBy('id_pegawai');
+
+            $query = \App\Models\Pegawai::join('petugas', 'pegawai.nik', '=', 'petugas.nip')
+                ->leftJoin('departemen', 'pegawai.departemen', '=', 'departemen.dep_id')
+                ->leftJoinSub($cutiSub, 'cuti', function($join) {
+                    $join->on('pegawai.id', '=', 'cuti.id_pegawai');
+                })
+                ->where('pegawai.stts_aktif', 'AKTIF')
+                ->where('petugas.kd_jbtn', '!=', '-')
+                ->select(
+                    'pegawai.id',
+                    'pegawai.nama',
+                    'pegawai.nik',
+                    'pegawai.jbtn',
+                    'pegawai.departemen as dep_id',
+                    'departemen.nama as departemen',
+                    \Illuminate\Support\Facades\DB::raw('IFNULL(cuti.s1_took, 0) as s1_took'),
+                    \Illuminate\Support\Facades\DB::raw('IFNULL(cuti.s2_took, 0) as s2_took'),
+                    \Illuminate\Support\Facades\DB::raw('6 - IFNULL(cuti.s1_took, 0) as s1_left'),
+                    \Illuminate\Support\Facades\DB::raw('6 - IFNULL(cuti.s2_took, 0) as s2_left')
+                );
+        } else {
+            // List mode for other leave types
+            $query = \App\Models\RsiaCuti::join('pegawai', 'rsia_cuti.id_pegawai', '=', 'pegawai.id')
+                ->leftJoin('departemen', 'pegawai.departemen', '=', 'departemen.dep_id')
+                ->where('rsia_cuti.id_jenis', $id_jenis)
+                ->whereYear('rsia_cuti.tanggal_cuti', $year)
+                ->where('rsia_cuti.status_cuti', '2')
+                ->select(
+                    'pegawai.nama',
+                    'pegawai.nik',
+                    'pegawai.departemen as dep_id',
+                    'departemen.nama as departemen',
+                    'rsia_cuti.tanggal_cuti',
+                    'rsia_cuti.id_cuti'
+                );
+
+            if ($id_jenis == 2) {
+                // Join with cuti_bersalin to get range
+                $query->leftJoin('rsia_cuti_bersalin', 'rsia_cuti.id_cuti', '=', 'rsia_cuti_bersalin.id_cuti')
+                    ->addSelect('rsia_cuti_bersalin.tgl_mulai', 'rsia_cuti_bersalin.tgl_selesai');
+            }
+        }
+
+        if ($request->search) {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('pegawai.nama', 'like', "%{$search}%")
+                  ->orWhere('pegawai.nik', 'like', "%{$search}%");
+            });
+        }
+
+        if ($request->dep_id) {
+            $query->where('pegawai.departemen', $request->dep_id);
+        }
+
+        $rekap = $query->orderBy('pegawai.nama', 'asc')->get();
+
+        return response()->json([
+            'metaData' => ['code' => 200, 'message' => 'OK'],
+            'response' => $rekap
+        ]);
+    }
+
+    /**
      * Get id jenis cuti
      * 
      * @param string $jenis

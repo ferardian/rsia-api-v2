@@ -42,6 +42,13 @@ return [
             'cons_secret' => env('BPJS_ANTROL_CONS_SECRET'),
             'user_key' => env('BPJS_ANTROL_USER_KEY'),
             'base_url' => env('BPJS_ANTROL_BASE_URL'),
+        ],
+
+        'vclaim' => [
+            'cons_id' => env('BPJS_VCLAIM_CONS_ID'),
+            'cons_secret' => env('BPJS_VCLAIM_CONS_SECRET'),
+            'user_key' => env('BPJS_VCLAIM_USER_KEY'),
+            'base_url' => env('BPJS_VCLAIM_BASE_URL'),
         ]
     ],
 

@@ -11,6 +11,7 @@ use App\Http\Controllers\v2\MappingJabatanController;
 Route::middleware(['auth:aes', 'claim:role,pegawai|dokter|IT|admin|direksi'])->prefix('sdi')->group(function () {
     // Jadwal Pegawai Routes
     Route::get('jadwal-pegawai', [JadwalPegawaiController::class, 'index']);
+    Route::get('rekap-cuti', [\App\Http\Controllers\v2\CutiPegawaiController::class, 'rekapCuti']);
     Route::post('jadwal-pegawai', [JadwalPegawaiController::class, 'store']);
     Route::post('jadwal-pegawai/admin', [JadwalPegawaiController::class, 'storeAdmin']);
     Route::post('jadwal-pegawai/approve', [JadwalPegawaiController::class, 'approve']);

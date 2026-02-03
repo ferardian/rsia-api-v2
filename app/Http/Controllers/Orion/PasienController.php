@@ -44,6 +44,6 @@ class PasienController extends Controller
 
     public function searchableBy(): array
     {
-        return ['no_rkm_medis', 'nm_pasien'];
+        return ['no_rkm_medis', 'nm_pasien', 'no_ktp', 'no_peserta'];
     }
 }

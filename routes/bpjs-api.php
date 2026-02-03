@@ -40,4 +40,14 @@ Route::group(['middleware' => ['auth:aes']], function () {
     Route::post('/bpjs/antrol/antrean/sync-queue', [\App\Http\Controllers\v2\BpjsAntrolController::class, 'syncTaskQueue']);
     Route::get('/bpjs/antrol/sep/count/{tanggal}', [\App\Http\Controllers\v2\BpjsAntrolController::class, 'getSepCount']);
     Route::get('/bpjs/antrol/sep/range/{tglAwal}/{tglAkhir}', [\App\Http\Controllers\v2\BpjsAntrolController::class, 'getSepCountByRange']);
+
+    // BPJS VClaim
+    Route::get('/bpjs/vclaim/mapping/dokter', [\App\Http\Controllers\v2\BpjsVclaimController::class, 'indexMapping']);
+    Route::get('/bpjs/vclaim/referensi/dokter', [\App\Http\Controllers\v2\BpjsVclaimController::class, 'getRefDokter']);
+    Route::post('/bpjs/vclaim/mapping/dokter', [\App\Http\Controllers\v2\BpjsVclaimController::class, 'storeMapping']);
+    Route::delete('/bpjs/vclaim/mapping/dokter/{kd_dokter}', [\App\Http\Controllers\v2\BpjsVclaimController::class, 'destroyMapping']);
+
+    // BPJS VClaim Peserta
+    Route::get('/bpjs/vclaim/peserta/nokartu/{no_kartu}/{tgl_sep}', [\App\Http\Controllers\v2\BpjsVclaimController::class, 'getPesertaByNoKartu']);
+    Route::get('/bpjs/vclaim/peserta/nik/{nik}/{tgl_sep}', [\App\Http\Controllers\v2\BpjsVclaimController::class, 'getPesertaByNik']);
 });
