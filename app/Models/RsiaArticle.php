@@ -18,9 +18,21 @@ class RsiaArticle extends Model
     public function getImageAttribute($value)
     {
         if (empty($value)) return null;
-        if (str_contains(config('app.url'), 'https://') || !str_contains($value, 'localhost')) {
-            return str_replace('http://', 'https://', $value);
+
+        // If it's already a full URL (legacy data)
+        if (str_starts_with($value, 'http')) {
+            $imageUrl = $value;
+        } else {
+            // New data: relative path from storage
+            $imageUrl = url('/storage/' . $value);
         }
-        return $value;
+
+        // IP vs Domain HTTPS logic
+        $host = parse_url($imageUrl, PHP_URL_HOST);
+        if (!str_contains($host, 'localhost') && !filter_var($host, FILTER_VALIDATE_IP)) {
+            return str_replace('http://', 'https://', $imageUrl);
+        }
+        
+        return $imageUrl;
     }
 }

@@ -46,16 +46,10 @@ class RsiaArticleController extends Controller
             }
 
             $image->move($destinationPath, $name);
-            $imageUrl = url('/storage/article/' . $name);
-            
-            // Force HTTPS if not localhost and not an IP address
-            $host = parse_url($imageUrl, PHP_URL_HOST);
-            if (!str_contains($host, 'localhost') && !filter_var($host, FILTER_VALIDATE_IP)) {
-                $imageUrl = str_replace('http://', 'https://', $imageUrl);
-            }
+            $imagePath = 'article/' . $name;
 
             $article = RsiaArticle::create([
-                'image'    => $imageUrl,
+                'image'    => $imagePath,
                 'title'    => $request->title,
                 'content'  => $request->content,
                 'category' => $request->category,
@@ -88,10 +82,19 @@ class RsiaArticleController extends Controller
         $data = $request->only(['title', 'content', 'category', 'order', 'status']);
 
         if ($request->hasFile('image')) {
-            // Delete old image
-            $oldPath = str_replace(url('/'), public_path(), $article->image);
-            if (file_exists($oldPath)) {
-                @unlink($oldPath);
+            // Delete old image using raw value from database
+            $oldImage = $article->getRawOriginal('image');
+            if ($oldImage) {
+                // If it's a legacy full URL, try to extract path
+                if (str_starts_with($oldImage, 'http')) {
+                    $oldPath = str_replace(url('/'), public_path(), $oldImage);
+                } else {
+                    $oldPath = public_path('storage/' . $oldImage);
+                }
+
+                if (file_exists($oldPath) && !empty($oldImage)) {
+                    @unlink($oldPath);
+                }
             }
 
             $image = $request->file('image');
@@ -99,12 +102,7 @@ class RsiaArticleController extends Controller
             $destinationPath = public_path('/storage/article');
             $image->move($destinationPath, $name);
             
-            $imageUrl = url('/storage/article/' . $name);
-            $host = parse_url($imageUrl, PHP_URL_HOST);
-            if (!str_contains($host, 'localhost') && !filter_var($host, FILTER_VALIDATE_IP)) {
-                $imageUrl = str_replace('http://', 'https://', $imageUrl);
-            }
-            $data['image'] = $imageUrl;
+            $data['image'] = 'article/' . $name;
         }
 
         $article->update($data);
@@ -119,10 +117,19 @@ class RsiaArticleController extends Controller
             return ApiResponse::notFound('Artikel tidak ditemukan');
         }
 
-        // Delete image
-        $oldPath = str_replace(url('/'), public_path(), $article->image);
-        if (file_exists($oldPath)) {
-            @unlink($oldPath);
+        // Delete image using raw value from database
+        $oldImage = $article->getRawOriginal('image');
+        if ($oldImage) {
+            // If it's a legacy full URL, try to extract path
+            if (str_starts_with($oldImage, 'http')) {
+                $oldPath = str_replace(url('/'), public_path(), $oldImage);
+            } else {
+                $oldPath = public_path('storage/' . $oldImage);
+            }
+
+            if (file_exists($oldPath) && !empty($oldImage)) {
+                @unlink($oldPath);
+            }
         }
 
         $article->delete();
