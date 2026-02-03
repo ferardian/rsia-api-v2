@@ -83,8 +83,11 @@ class AntrianPoliController extends Controller
                 $results[] = $clinicData;
             }
 
-            return ApiResponse::success($results);
+            Log::info('AntrianPoliController: Successfully generated ' . count($results) . ' clinic summaries.');
+
+            return ApiResponse::successWithData($results, 'Data antrian berhasil diambil');
         } catch (\Exception $e) {
+            Log::error('AntrianPoliController Error: ' . $e->getMessage());
             return ApiResponse::error('Gagal mengambil data antrian: ' . $e->getMessage(), 'exception', null, 500);
         }
     }
