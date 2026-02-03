@@ -50,7 +50,7 @@ class AntrianPoliController extends Controller
 
                 // Get clinics that have schedules on this day among our target clinics
                 $clinicsWithSchedule = Poliklinik::whereIn('kd_poli', $targetClinics)
-                    ->whereHas('jadwal', function($q) use ($dayName) {
+                    ->whereHas('jadwal_dokter', function($q) use ($dayName) {
                         $q->where('hari_kerja', $dayName);
                     })
                     ->orderBy('nm_poli')
