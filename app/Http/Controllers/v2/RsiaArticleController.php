@@ -48,8 +48,9 @@ class RsiaArticleController extends Controller
             $image->move($destinationPath, $name);
             $imageUrl = url('/storage/article/' . $name);
             
-            // Force HTTPS if not localhost for production compatibility
-            if (!str_contains($imageUrl, 'localhost')) {
+            // Force HTTPS if not localhost and not an IP address
+            $host = parse_url($imageUrl, PHP_URL_HOST);
+            if (!str_contains($host, 'localhost') && !filter_var($host, FILTER_VALIDATE_IP)) {
                 $imageUrl = str_replace('http://', 'https://', $imageUrl);
             }
 
@@ -99,7 +100,8 @@ class RsiaArticleController extends Controller
             $image->move($destinationPath, $name);
             
             $imageUrl = url('/storage/article/' . $name);
-            if (!str_contains($imageUrl, 'localhost')) {
+            $host = parse_url($imageUrl, PHP_URL_HOST);
+            if (!str_contains($host, 'localhost') && !filter_var($host, FILTER_VALIDATE_IP)) {
                 $imageUrl = str_replace('http://', 'https://', $imageUrl);
             }
             $data['image'] = $imageUrl;
