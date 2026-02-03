@@ -97,7 +97,8 @@ class BookingRegistrasiController extends Controller
 
         \Illuminate\Support\Facades\DB::transaction(function () use ($request, $booking) {
             // get the last no_reg for the date of tanggal_periksa
-            $lastNoReg = $booking->where('tanggal_periksa', $request->tanggal_periksa)
+            // get the last no_reg for the date of tanggal_periksa
+            $lastNoReg = \App\Models\RegPeriksa::where('tgl_registrasi', $request->tanggal_periksa)
                 ->where('kd_poli', $request->kd_poli)
                 ->where('kd_dokter', $request->kd_dokter)
                 ->max('no_reg');
