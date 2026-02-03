@@ -10,6 +10,7 @@ use App\Models\JadwalPoli;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class AntrianPoliController extends Controller
 {
@@ -30,6 +31,8 @@ class AntrianPoliController extends Controller
                 ->where('kd_poli', '!=', '-')
                 ->orderBy('nm_poli')
                 ->get(['kd_poli', 'nm_poli']);
+
+            Log::info('AntrianPoliController: Found ' . $clinics->count() . ' active clinics.');
 
             // 3. Prepare result structure
             $results = [];
