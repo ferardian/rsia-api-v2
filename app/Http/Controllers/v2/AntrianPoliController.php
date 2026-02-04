@@ -144,15 +144,17 @@ class AntrianPoliController extends Controller
             ->where('stts', '!=', 'Batal')
             ->count();
 
-        // Hitung Sisa Antrian Spesifik (Jika parameter no_reg dikirim)
+        // Hitung Sisa Antrian Spesifik (Jika parameter no_reg dikirim - atau global)
         $sisaAntrian = 0;
         if ($request->has('no_reg')) {
             $myReg = $request->no_reg;
+            // UPDATE: Menghitung SEMUA yang statusnya 'Belum' (Total Antrian Belum Dipanggil)
+            // Sesuai request: "bukan yang dibawah nomor saya, tapi semua"
             $sisaAntrian = RegPeriksa::where('kd_poli', $request->kd_poli)
                 ->where('kd_dokter', $request->kd_dokter)
                 ->where('tgl_registrasi', $date)
-                ->where('no_reg', '<', $myReg) // Yang nomornya lebih kecil dari saya
-                ->where('stts', 'Belum') // HANYA yang statusnya 'Belum' (masih menunggu dipanggil)
+                // ->where('no_reg', '<', $myReg) // Logic lama (user specific) dihapus
+                ->where('stts', 'Belum')
                 ->count();
         }
 
