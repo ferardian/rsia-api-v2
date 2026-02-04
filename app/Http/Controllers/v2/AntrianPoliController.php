@@ -104,4 +104,49 @@ class AntrianPoliController extends Controller
             return ApiResponse::error('Gagal mengambil data antrian: ' . $e->getMessage(), 'exception', null, 500);
         }
     }
+    public function statusAntrian(Request $request)
+    {
+        $request->validate([
+            'kd_poli' => 'required',
+            'kd_dokter' => 'required',
+        ]);
+        
+        $date = date('Y-m-d');
+        
+        $lastServed = RegPeriksa::where('kd_poli', $request->kd_poli)
+            ->where('kd_dokter', $request->kd_dokter)
+            ->where('tgl_registrasi', $date)
+            ->whereNotIn('stts', ['Belum', 'Batal'])
+            ->orderBy('no_reg', 'desc')
+            ->first();
+
+        $currentQueue = $lastServed ? (int)$lastServed->no_reg : 0;
+        
+        $totalQueue = RegPeriksa::where('kd_poli', $request->kd_poli)
+            ->where('kd_dokter', $request->kd_dokter)
+            ->where('tgl_registrasi', $date)
+            ->where('stts', '!=', 'Batal')
+            ->count();
+
+        // DEBUG: Get first 5 records to see what statuses exist
+        $samples = RegPeriksa::where('kd_poli', $request->kd_poli)
+            ->where('kd_dokter', $request->kd_dokter)
+            ->where('tgl_registrasi', $date)
+            ->orderBy('pop_serial', 'asc') // or no_reg
+            ->limit(5)
+            ->get(['no_reg', 'stts', 'no_rawat']);
+
+        return ApiResponse::successWithData([
+            'current_queue' => $currentQueue,
+            'total_queue' => $totalQueue,
+            'status' => $currentQueue > 0 ? 'Sedang Berlangsung' : 'Belum Dimulai',
+            'debug' => [
+                'samples' => $samples,
+                'req_poli' => $request->kd_poli,
+                'req_dokter' => $request->kd_dokter,
+                'date' => $date,
+                'last_served_raw' => $lastServed
+            ]
+        ], 'Status antrian berhasil diambil');
+    }
 }
