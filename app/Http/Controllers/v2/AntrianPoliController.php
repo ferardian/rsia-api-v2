@@ -114,12 +114,12 @@ class AntrianPoliController extends Controller
         $date = date('Y-m-d');
         
         // Logic Baru:
-        // 1. Prioritas: Cari yang SEDANG dilayani (Berkunjung/Dirawat)
+        // 1. Prioritas: Cari yang SEDANG dilayani (Berkunjung/Dirawat/Ada)
         $active = RegPeriksa::where('kd_poli', $request->kd_poli)
             ->where('kd_dokter', $request->kd_dokter)
             ->where('tgl_registrasi', $date)
-            ->whereIn('stts', ['Berkunjung', 'Dirawat'])
-            ->orderBy('no_reg', 'asc') // Ambil yang paling kecil nomornya jika ada > 1 yg aktif (seharusnya cuma 1)
+            ->whereIn('stts', ['Berkunjung', 'Dirawat', 'Ada'])
+            ->orderBy('no_reg', 'asc')
             ->first();
 
         if ($active) {
