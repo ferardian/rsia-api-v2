@@ -152,7 +152,7 @@ class AntrianPoliController extends Controller
                 ->where('kd_dokter', $request->kd_dokter)
                 ->where('tgl_registrasi', $date)
                 ->where('no_reg', '<', $myReg) // Yang nomornya lebih kecil dari saya
-                ->whereNotIn('stts', ['Sudah', 'Batal']) // Dan statusnya BELUM selesai
+                ->where('stts', 'Belum') // HANYA yang statusnya 'Belum' (masih menunggu dipanggil)
                 ->count();
         }
 
