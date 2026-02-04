@@ -113,14 +113,30 @@ class AntrianPoliController extends Controller
         
         $date = date('Y-m-d');
         
-        $lastServed = RegPeriksa::where('kd_poli', $request->kd_poli)
+        // Logic Baru:
+        // 1. Prioritas: Cari yang SEDANG dilayani (Berkunjung/Dirawat)
+        $active = RegPeriksa::where('kd_poli', $request->kd_poli)
             ->where('kd_dokter', $request->kd_dokter)
             ->where('tgl_registrasi', $date)
-            ->whereNotIn('stts', ['Belum', 'Batal'])
-            ->orderBy('no_reg', 'desc')
+            ->whereIn('stts', ['Berkunjung', 'Dirawat'])
+            ->orderBy('no_reg', 'asc') // Ambil yang paling kecil nomornya jika ada > 1 yg aktif (seharusnya cuma 1)
             ->first();
 
-        $currentQueue = $lastServed ? (int)$lastServed->no_reg : 0;
+        if ($active) {
+            $currentQueue = (int)$active->no_reg;
+             $statusText = 'Sedang Diperiksa';
+        } else {
+            // 2. Fallback: Jika tidak ada yang aktif, ambil yang terakhir SUDAH selesai
+            $lastServed = RegPeriksa::where('kd_poli', $request->kd_poli)
+                ->where('kd_dokter', $request->kd_dokter)
+                ->where('tgl_registrasi', $date)
+                ->where('stts', 'Sudah')
+                ->orderBy('no_reg', 'desc')
+                ->first();
+            
+            $currentQueue = $lastServed ? (int)$lastServed->no_reg : 0;
+            $statusText = $currentQueue > 0 ? 'Sedang Berlangsung' : 'Belum Dimulai';
+        }
         
         $totalQueue = RegPeriksa::where('kd_poli', $request->kd_poli)
             ->where('kd_dokter', $request->kd_dokter)
@@ -139,13 +155,13 @@ class AntrianPoliController extends Controller
         return ApiResponse::successWithData([
             'current_queue' => $currentQueue,
             'total_queue' => $totalQueue,
-            'status' => $currentQueue > 0 ? 'Sedang Berlangsung' : 'Belum Dimulai',
+            'status' => $statusText,
             'debug' => [
                 'samples' => $samples,
                 'req_poli' => $request->kd_poli,
                 'req_dokter' => $request->kd_dokter,
                 'date' => $date,
-                'last_served_raw' => $lastServed
+                'active_found' => $active ? true : false
             ]
         ], 'Status antrian berhasil diambil');
     }
