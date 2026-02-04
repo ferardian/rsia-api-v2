@@ -132,7 +132,7 @@ class AntrianPoliController extends Controller
         $samples = RegPeriksa::where('kd_poli', $request->kd_poli)
             ->where('kd_dokter', $request->kd_dokter)
             ->where('tgl_registrasi', $date)
-            ->orderBy('pop_serial', 'asc') // or no_reg
+            ->orderBy('no_reg', 'asc') // Changed from pop_serial to no_reg
             ->limit(5)
             ->get(['no_reg', 'stts', 'no_rawat']);
 
