@@ -144,23 +144,36 @@ class AntrianPoliController extends Controller
             ->where('stts', '!=', 'Batal')
             ->count();
 
+        // Hitung Sisa Antrian Spesifik (Jika parameter no_reg dikirim)
+        $sisaAntrian = 0;
+        if ($request->has('no_reg')) {
+            $myReg = $request->no_reg;
+            $sisaAntrian = RegPeriksa::where('kd_poli', $request->kd_poli)
+                ->where('kd_dokter', $request->kd_dokter)
+                ->where('tgl_registrasi', $date)
+                ->where('no_reg', '<', $myReg) // Yang nomornya lebih kecil dari saya
+                ->whereNotIn('stts', ['Sudah', 'Batal']) // Dan statusnya BELUM selesai
+                ->count();
+        }
+
         // DEBUG: Get first 5 records to see what statuses exist
         $samples = RegPeriksa::where('kd_poli', $request->kd_poli)
             ->where('kd_dokter', $request->kd_dokter)
             ->where('tgl_registrasi', $date)
-            ->orderBy('no_reg', 'asc') // Changed from pop_serial to no_reg
+            ->orderBy('no_reg', 'asc')
             ->limit(5)
             ->get(['no_reg', 'stts', 'no_rawat']);
 
         return ApiResponse::successWithData([
             'current_queue' => $currentQueue,
             'total_queue' => $totalQueue,
+            'sisa_antrian' => $sisaAntrian,
             'status' => $statusText,
             'debug' => [
                 'samples' => $samples,
                 'req_poli' => $request->kd_poli,
                 'req_dokter' => $request->kd_dokter,
-                'date' => $date,
+                'req_reg' => $request->no_reg ?? 'N/A',
                 'active_found' => $active ? true : false
             ]
         ], 'Status antrian berhasil diambil');
