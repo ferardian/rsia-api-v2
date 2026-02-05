@@ -50,7 +50,13 @@ class ResepController extends Controller
                 ->where('kode_brng', $detail->kode_brng)
                 ->first();
 
-            if ($resepDokterData && $resepDokterData->aturan_pakai) {
+            // Jika tidak ada di resep_dokter, berarti ini adalah komponen racikan (puyer)
+            // Kita skip agar tidak muncul notifikasi ganda/individu untuk komponen puyer.
+            if (!$resepDokterData) {
+                continue;
+            }
+
+            if ($resepDokterData->aturan_pakai) {
                 $aturanPakai = $resepDokterData->aturan_pakai;
             } elseif ($detail->aturanPakai) {
                 $aturanPakai = $detail->aturanPakai->aturan ?? $detail->aturanPakai;
