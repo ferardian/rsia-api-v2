@@ -41,7 +41,8 @@ class RsiaNotifResep extends Command
         $this->info("Found " . $resepBaru->count() . " new prescriptions.");
 
         foreach ($resepBaru as $resep) {
-            $topic = "pasien_" . $resep->no_rkm_medis;
+            $sanitizedRm = str_replace('/', '', $resep->no_rkm_medis);
+            $topic = "pasien_" . $sanitizedRm;
             
             try {
                 // 2. Build silent data message
