@@ -26,4 +26,7 @@ Route::prefix('farmasi')->middleware('auth:aes')->group(function () {
     Route::get('/riwayat-obat/statuses', [App\Http\Controllers\v2\RiwayatObatController::class, 'statuses']);
     Route::get('/riwayat-obat/last-stock', [App\Http\Controllers\v2\RiwayatObatController::class, 'lastStock']);
     Route::get('/riwayat-obat/export-last-stock', [App\Http\Controllers\v2\RiwayatObatController::class, 'exportLastStock']);
+    
+    // Resep
+    Route::get('/resep/{no_resep}', [\App\Http\Controllers\v2\ResepController::class, 'show']);
 });

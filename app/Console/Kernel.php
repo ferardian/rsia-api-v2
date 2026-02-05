@@ -16,6 +16,7 @@ class Kernel extends ConsoleKernel
     protected function schedule(Schedule $schedule)
     {
         $schedule->command('rsia:notif-undangan')->dailyAt('05:00');
+        $schedule->command('rsia:notif-resep')->everyMinute();
     }
 
     /**
