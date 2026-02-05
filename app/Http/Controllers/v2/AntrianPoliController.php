@@ -170,14 +170,7 @@ class AntrianPoliController extends Controller
             'current_queue' => $currentQueue,
             'total_queue' => $totalQueue,
             'sisa_antrian' => $sisaAntrian,
-            'status' => $statusText,
-            'debug' => [
-                'samples' => $samples,
-                'req_poli' => $request->kd_poli,
-                'req_dokter' => $request->kd_dokter,
-                'req_reg' => $request->no_reg ?? 'N/A',
-                'active_found' => $active ? true : false
-            ]
+            'status' => $statusText
         ], 'Status antrian berhasil diambil');
     }
 }
