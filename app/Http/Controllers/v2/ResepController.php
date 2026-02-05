@@ -95,6 +95,7 @@ class ResepController extends Controller
                 'no_rawat' => $resep->no_rawat,
                 'tgl_peresepan' => $resep->tgl_peresepan,
                 'dokter' => $resep->dokter->nm_dokter ?? 'Dokter',
+                'nm_pasien' => $resep->regPeriksa->pasien->nm_pasien ?? 'Pasien',
                 'obat' => $obatList
             ]
         ]);
