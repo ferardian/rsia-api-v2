@@ -27,6 +27,10 @@ Route::prefix('farmasi')->middleware('auth:aes')->group(function () {
     Route::get('/riwayat-obat/last-stock', [App\Http\Controllers\v2\RiwayatObatController::class, 'lastStock']);
     Route::get('/riwayat-obat/export-last-stock', [App\Http\Controllers\v2\RiwayatObatController::class, 'exportLastStock']);
     
-    // Resep
+    // ... existing routes ...
+});
+
+Route::prefix('farmasi')->middleware('auth:aes,pasien')->group(function () {
+    // Resep details for both pharmacy staff and patients
     Route::get('/resep/{no_resep}', [\App\Http\Controllers\v2\ResepController::class, 'show']);
 });
