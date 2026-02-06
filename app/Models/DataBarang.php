@@ -114,4 +114,8 @@ class DataBarang extends Model
     {
         return $this->hasMany(RiwayatBarangMedis::class, 'kode_brng', 'kode_brng');
     }
+    public function rsiaPpraMappingObat()
+    {
+        return $this->hasOne(RsiaPpraMappingObat::class, 'kode_brng', 'kode_brng');
+    }
 }

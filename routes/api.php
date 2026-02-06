@@ -59,6 +59,9 @@ Route::middleware(['claim:role,pegawai|dokter|pasien'])->prefix('notification')-
 });
 
 
+
+
+
 // ========== OTP ==========
 Route::prefix('otp')->middleware(['detail-user', 'claim:role,pegawai|dokter|pasien'])->group(function () {
     Route::post('create', [RsiaOtpController::class, 'createOtp']);
