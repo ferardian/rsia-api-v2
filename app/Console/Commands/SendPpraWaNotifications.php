@@ -98,14 +98,14 @@ class SendPpraWaNotifications extends Command
                 $shortCode = str_pad(random_int(0, 9999), 4, '0', STR_PAD_LEFT);
             }
 
-            // Persiapan Pesan (More Professional & Beautiful)
+            // Persiapan Pesan (More Compact & Professional)
             $messageText = "🏥 *NOTIFIKASI PPRA - RSIA AISYIYAH*\n" .
-                           "━━━━━━━━━━━━━━━━━━━\n\n" .
+                           "━━━━━━━━━━━━━━━━━━━\n" .
                            "💊 *Detail Resep Antibiotik:*\n" .
                            "• No. Resep: `{$item->no_resep}`\n" .
                            "• Pasien: *{$item->nm_pasien}*\n" .
                            "• Obat: _{$item->nama_brng}_\n" .
-                           "• Dosis: *{$item->aturan_pakai}*\n\n" .
+                           "• Dosis: *{$item->aturan_pakai}*\n" .
                            "━━━━━━━━━━━━━━━━━━━\n" .
                            "📱 *Konfirmasi Cepat:*\n" .
                            "Silakan balas pesan ini dengan kode:\n\n" .
