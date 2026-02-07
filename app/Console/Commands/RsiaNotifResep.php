@@ -29,6 +29,7 @@ class RsiaNotifResep extends Command
             ->join('reg_periksa as rp', 'ro.no_rawat', '=', 'rp.no_rawat')
             ->leftJoin('rsia_resep_obat_terkirim as track', 'ro.no_resep', '=', 'track.no_resep')
             ->whereNull('track.no_resep')
+            ->where('ro.status', 'ralan')
             ->where('ro.tgl_perawatan', '>=', now()->subDays(1)->format('Y-m-d'))
             ->select('ro.no_resep', 'ro.no_rawat', 'rp.no_rkm_medis')
             ->get();
@@ -45,7 +46,53 @@ class RsiaNotifResep extends Command
             $topic = "pasien_" . $sanitizedRm;
             
             try {
-                // 2. Build silent data message
+                // 1. Get Patient Name for easier denormalization
+                $pasien = DB::table('pasien')->where('no_rkm_medis', $resep->no_rkm_medis)->first();
+                $nmPasien = $pasien ? $pasien->nm_pasien : 'Pasien';
+
+                // 2. Fetch Regular Medications
+                $items = DB::table('resep_dokter')
+                    ->where('no_resep', $resep->no_resep)
+                    ->select('kode_brng', 'jml', 'aturan_pakai')
+                    ->get();
+
+                // 3. Fetch Compounded Medications (Racikan)
+                $racikans = DB::table('resep_dokter_racikan')
+                    ->where('no_resep', $resep->no_resep)
+                    ->select('no_resep', 'nama_racik', 'aturan_pakai', 'kd_racik')
+                    ->get();
+
+                // 4. Group Medications by Schedule
+                $schedules = []; // [datetime => [medication names]]
+                
+                // Process Regular Items
+                foreach ($items as $item) {
+                    $drug = DB::table('databarang')->where('kode_brng', $item->kode_brng)->first();
+                    $nmObat = $drug ? $drug->nama_brng : $item->kode_brng;
+                    $this->calculateSlots($resep->no_resep, $nmObat, $item->aturan_pakai, $item->jml, $schedules);
+                }
+
+                // Process Racikan Items
+                foreach ($racikans as $racik) {
+                    $this->calculateSlots($resep->no_resep, $racik->nama_racik, $racik->aturan_pakai, 10, $schedules); // Default 10 slots for racikan
+                }
+
+                // 5. Insert into rsia_medication_schedules
+                foreach ($schedules as $time => $medications) {
+                    DB::table('rsia_medication_schedules')->insertOrIgnore([
+                        'no_resep' => $resep->no_resep,
+                        'no_rkm_medis' => $resep->no_rkm_medis,
+                        'nm_pasien' => $nmPasien,
+                        'topic' => $topic,
+                        'schedule_time' => $time,
+                        'medication_summary' => implode(", ", array_unique($medications)),
+                        'status' => 'pending',
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+                }
+
+                // 6. Build silent data message for Mobile Sync (Fallback)
                 $message = CloudMessage::withTarget('topic', $topic)
                     ->withData([
                         'type' => 'SYNC_MEDICINE',
@@ -55,21 +102,48 @@ class RsiaNotifResep extends Command
                         'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
                     ]);
 
-                // 3. Send via Firebase
                 FirebaseCloudMessaging::send($message);
 
-                // 4. Record as sent
                 DB::table('rsia_resep_obat_terkirim')->insert([
                     'no_resep' => $resep->no_resep,
                     'created_at' => now()
                 ]);
 
-                $this->info("Sent sync signal for Resep: {$resep->no_resep} to Topic: {$topic}");
+                $this->info("Scheduled and synced Resep: {$resep->no_resep}");
             } catch (\Exception $e) {
-                $this->error("Failed to send notification for {$resep->no_resep}: " . $e->getMessage());
+                $this->error("Error for {$resep->no_resep}: " . $e->getMessage());
             }
         }
 
         return 0;
+    }
+
+    private function calculateSlots($noResep, $nmObat, $aturan, $jml, &$schedules)
+    {
+        // Simple Parser logic mirroring Flutter
+        preg_match('/(\d+)x(\d+)/i', $aturan, $matches);
+        if (count($matches) < 3) return;
+
+        $freq = (int)$matches[1];
+        $days = (int)ceil($jml / $freq);
+        if ($days > 30) $days = 30; // Cap at 30 days
+
+        $hours = [7]; // Default
+        if ($freq == 2) $hours = [7, 19];
+        if ($freq == 3) $hours = [7, 13, 19];
+
+        $startDate = now();
+        for ($i = 0; $i < $days; $i++) {
+            foreach ($hours as $h) {
+                $dt = clone $startDate;
+                $dt->addDays($i)->setHour($h)->setMinute(0)->setSecond(0);
+                
+                // Don't schedule for times that have already passed today
+                if ($dt->isPast()) continue;
+
+                $timeKey = $dt->format('Y-m-d H:i:s');
+                $schedules[$timeKey][] = $nmObat;
+            }
+        }
     }
 }
