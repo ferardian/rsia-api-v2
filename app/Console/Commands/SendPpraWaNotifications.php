@@ -37,7 +37,8 @@ class SendPpraWaNotifications extends Command
                      ->on('dpo.kode_brng', '=', 'log.kode_brng');
             })
             ->whereNull('log.no_resep')
-            ->where('ro.tgl_perawatan', '>=', now()->subDay()->toDateTimeString())
+            // 🕒 Revert ke 1 jam agar aman untuk production setelah testing
+            ->where('ro.tgl_perawatan', '>=', now()->subHour()->toDateTimeString())
             ->where('ro.status', 'like', 'ranap%')
             ->select(
                 'ro.no_resep',
@@ -97,17 +98,20 @@ class SendPpraWaNotifications extends Command
                 $shortCode = str_pad(random_int(0, 9999), 4, '0', STR_PAD_LEFT);
             }
 
-            // Persiapan Pesan
-            $messageText = "*NOTIFIKASI PPRA*\n\n" .
-                           "Terdapat resep antibiotik baru:\n" .
-                           "No. Resep: {$item->no_resep}\n" .
-                           "Pasien: {$item->nm_pasien}\n" .
-                           "Obat: {$item->nama_brng}\n" .
-                           "Dosis: {$item->aturan_pakai}\n\n" .
-                           "Balas WA ini dengan format:\n" .
-                           "*ACC {$shortCode} [Catatan]*\n" .
-                           "atau\n" .
-                           "*TOLAK {$shortCode} [Alasan]*";
+            // Persiapan Pesan (More Professional & Beautiful)
+            $messageText = "🏥 *NOTIFIKASI PPRA - RSIA AISYIYAH*\n" .
+                           "━━━━━━━━━━━━━━━━━━━\n\n" .
+                           "💊 *Detail Resep Antibiotik:*\n" .
+                           "• No. Resep: `{$item->no_resep}`\n" .
+                           "• Pasien: *{$item->nm_pasien}*\n" .
+                           "• Obat: _{$item->nama_brng}_\n" .
+                           "• Dosis: *{$item->aturan_pakai}*\n\n" .
+                           "━━━━━━━━━━━━━━━━━━━\n" .
+                           "📱 *Konfirmasi Cepat:*\n" .
+                           "Silakan balas pesan ini dengan kode:\n\n" .
+                           "✅ *ACC {$shortCode} [Catatan]*\n" .
+                           "❌ *TOLAK {$shortCode} [Alasan]*\n\n" .
+                           "_Pesan ini dikirim otomatis oleh sistem PPRA RSIA._";
 
             $isLogged = false;
             foreach ($recipients as $recipient) {
