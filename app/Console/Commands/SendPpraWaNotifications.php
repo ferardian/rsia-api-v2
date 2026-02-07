@@ -37,7 +37,7 @@ class SendPpraWaNotifications extends Command
                      ->on('dpo.kode_brng', '=', 'log.kode_brng');
             })
             ->whereNull('log.no_resep')
-            ->where('ro.tgl_perawatan', '>=', now()->subHour()->toDateTimeString())
+            ->where('ro.tgl_perawatan', '>=', now()->subDay()->toDateTimeString())
             ->where('ro.status', 'like', 'ranap%')
             ->select(
                 'ro.no_resep',
@@ -130,6 +130,9 @@ class SendPpraWaNotifications extends Command
                         ]);
                         $isLogged = true;
                         $this->info("Successfully notified recipients for: {$item->no_resep} with code {$shortCode}");
+                        
+                        // Tambah jeda 2 detik per pesan untuk menghindari spam/blokir
+                        sleep(2);
                     }
                 } catch (\Exception $e) {
                     $this->error("Exception for {$item->no_resep} to {$recipient->nama}: " . $e->getMessage());
