@@ -18,29 +18,38 @@ class SendPpraWaNotifications extends Command
 
         // 1. Ambil resep obat ralan/ranap yang mengandung obat dalam mapping PPRA
         // Filter: Yang belum ada di rsia_ppra_notif_log
-        $newPrescriptions = DB::table('resep_dokter as rd')
-            ->join('resep_obat as ro', 'rd.no_resep', '=', 'ro.no_resep')
+        $newPrescriptions = DB::table('resep_obat as ro')
             ->join('reg_periksa as rp', 'ro.no_rawat', '=', 'rp.no_rawat')
             ->join('pasien as p', 'rp.no_rkm_medis', '=', 'p.no_rkm_medis')
-            ->join('rsia_ppra_mapping_obat as map', 'rd.kode_brng', '=', 'map.kode_brng')
-            ->join('databarang as db', 'rd.kode_brng', '=', 'db.kode_brng')
+            ->join('detail_pemberian_obat as dpo', function($join) {
+                $join->on('ro.no_rawat', '=', 'dpo.no_rawat')
+                     ->on('ro.tgl_perawatan', '=', 'dpo.tgl_perawatan')
+                     ->on('ro.jam', '=', 'dpo.jam');
+            })
+            ->join('rsia_ppra_mapping_obat as map', 'dpo.kode_brng', '=', 'map.kode_brng')
+            ->join('databarang as db', 'dpo.kode_brng', '=', 'db.kode_brng')
+            ->leftJoin('resep_dokter as rd', function($join) {
+                $join->on('ro.no_resep', '=', 'rd.no_resep')
+                     ->on('dpo.kode_brng', '=', 'rd.kode_brng');
+            })
             ->leftJoin('rsia_ppra_notif_log as log', function($join) {
-                $join->on('rd.no_resep', '=', 'log.no_resep')
-                     ->on('rd.kode_brng', '=', 'log.kode_brng');
+                $join->on('ro.no_resep', '=', 'log.no_resep')
+                     ->on('dpo.kode_brng', '=', 'log.kode_brng');
             })
             ->whereNull('log.no_resep')
             ->where('ro.tgl_perawatan', '>=', now()->subHour()->toDateTimeString())
-            ->where('ro.status', 'Ranap')
+            ->where('ro.status', 'like', 'ranap%')
             ->select(
-                'rd.no_resep',
-                'rd.kode_brng',
+                'ro.no_resep',
+                'dpo.kode_brng',
                 'db.nama_brng',
-                'rd.aturan_pakai',
-                'rd.jml',
+                DB::raw('COALESCE(rd.aturan_pakai, "-") as aturan_pakai'),
+                'dpo.jml',
                 'p.nm_pasien',
                 'ro.no_rawat',
                 'rp.no_rkm_medis'
             )
+            ->groupBy('ro.no_resep', 'dpo.kode_brng')
             ->get();
 
         if ($newPrescriptions->isEmpty()) {
