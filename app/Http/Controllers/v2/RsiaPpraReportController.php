@@ -27,6 +27,7 @@ class RsiaPpraReportController extends Controller
                     ->on('resep_dokter.kode_brng', '=', 'rsia_ppra_resep_verifikasi.kode_brng');
             })
             ->whereBetween('resep_obat.tgl_perawatan', [$start, $end])
+            ->where('reg_periksa.status_lanjut', 'Ranap')
             ->select([
                 'resep_obat.no_resep',
                 'resep_obat.no_rawat',

@@ -29,7 +29,8 @@ class SendPpraWaNotifications extends Command
                      ->on('rd.kode_brng', '=', 'log.kode_brng');
             })
             ->whereNull('log.no_resep')
-            ->where('ro.tgl_perawatan', '>=', now()->subHour()->toDateTimeString()) // Kembali ke 1 jam agar aman dari spam
+            ->where('ro.tgl_perawatan', '>=', now()->subHour()->toDateTimeString())
+            ->where('ro.status', 'Ranap')
             ->select(
                 'rd.no_resep',
                 'rd.kode_brng',
