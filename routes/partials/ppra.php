@@ -16,6 +16,9 @@ Route::prefix('ppra')->middleware(['auth:aes'])->group(function () {
     Route::post('verifikasi', [\App\Http\Controllers\v2\RsiaPpraVerificationController::class, 'store']);
     Route::post('verifikasi/telaah', [\App\Http\Controllers\v2\RsiaPpraVerificationController::class, 'telaah']);
     Route::post('verifikasi/approve', [\App\Http\Controllers\v2\RsiaPpraVerificationController::class, 'approve']);
-    Route::post('verifikasi-wa', [\App\Http\Controllers\v2\RsiaPpraVerificationController::class, 'verifyWa']);
     Route::get('verifikasi', [\App\Http\Controllers\v2\RsiaPpraVerificationController::class, 'show']);
+});
+
+Route::prefix('ppra')->group(function () {
+    Route::post('verifikasi-wa', [\App\Http\Controllers\v2\RsiaPpraVerificationController::class, 'verifyWa']);
 });

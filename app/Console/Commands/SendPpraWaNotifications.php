@@ -29,7 +29,7 @@ class SendPpraWaNotifications extends Command
                      ->on('rd.kode_brng', '=', 'log.kode_brng');
             })
             ->whereNull('log.no_resep')
-            ->where('ro.tgl_perawatan', '>=', now()->subDays(2)->format('Y-m-d')) // Ambil 2 hari terakhir untuk safety buffer
+            ->where('ro.tgl_perawatan', '>=', now()->subHour()->toDateTimeString()) // Kembali ke 1 jam agar aman dari spam
             ->select(
                 'rd.no_resep',
                 'rd.kode_brng',
@@ -56,7 +56,9 @@ class SendPpraWaNotifications extends Command
             ->join('petugas', 'rsia_tim_ppra.nik', '=', 'petugas.nip')
             ->where(function($q) {
                 $q->where('rsia_tim_ppra.jabatan', 'like', '%apoteker%')
-                  ->orWhere('rsia_tim_ppra.jabatan', 'like', '%farmasi%');
+                  ->orWhere('rsia_tim_ppra.jabatan', 'like', '%farmasi%')
+                  ->orWhere('rsia_tim_ppra.role', 'like', '%apoteker%')
+                  ->orWhere('rsia_tim_ppra.role', 'like', '%farmasi%');
             })
             ->whereNotNull('petugas.no_telp')
             ->select('petugas.no_telp', 'petugas.nama')
