@@ -14,19 +14,35 @@ class RsiaTemporaryPresensiController extends Controller
      */
     public function index(Request $request)
     {
-        $nik = $request->pegawai;
+        $query = \App\Models\TemporaryPresensi::query()
+            ->join('pegawai', 'temporary_presensi.id', '=', 'pegawai.id')
+            ->leftJoin('departemen', 'pegawai.departemen', '=', 'departemen.dep_id')
+            ->select([
+                'temporary_presensi.*',
+                'pegawai.nik',
+                'pegawai.nama',
+                'departemen.nama as nama_departemen'
+            ]);
 
-        // get pegawai by nik
-        $pegawai = \App\Models\Pegawai::where('nik', $nik)->first();
-
-        // check pegawai
-        if (!$pegawai) {
-            return \App\Helpers\ApiResponse::error('Resource not found', 'resource_not_found', null, 404);
+        // Search by name or nik
+        if ($request->has('search')) {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('pegawai.nama', 'like', "%{$search}%")
+                  ->orWhere('pegawai.nik', 'like', "%{$search}%")
+                  ->orWhere('departemen.nama', 'like', "%{$search}%");
+            });
         }
 
-        $temp = \App\Models\TemporaryPresensi::where('id', $pegawai->id)->first();
+        // Filter by status
+        if ($request->has('status') && $request->status != '') {
+            $query->where('temporary_presensi.status', $request->status);
+        }
 
-        return new \App\Http\Resources\RealDataResource($temp); 
+        $limit = $request->query('limit', 20);
+        $data = $query->orderBy('jam_datang', 'desc')->paginate($limit);
+
+        return \App\Helpers\ApiResponse::success('Data retrieved successfully', $data);
     }
 
     /**

@@ -18,6 +18,7 @@ class Kernel extends ConsoleKernel
         $schedule->command('rsia:notif-undangan')->dailyAt('05:00');
         $schedule->command('rsia:notif-resep')->everyMinute();
         $schedule->command('rsia:remind-obat')->everyMinute();
+        $schedule->command('rsia:ppra-wa-notif')->everyMinute();
     }
 
     /**

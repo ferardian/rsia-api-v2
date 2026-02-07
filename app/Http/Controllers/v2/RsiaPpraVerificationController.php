@@ -1,0 +1,174 @@
+<?php
+
+namespace App\Http\Controllers\v2;
+
+use App\Http\Controllers\Controller;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use App\Helpers\ApiResponse;
+
+class RsiaPpraVerificationController extends Controller
+{
+    public function store(Request $request)
+    {
+        $request->validate([
+            'no_resep' => 'required|string',
+            'kode_brng' => 'required|string',
+            'aturan_pakai' => 'nullable|string',
+            'keterangan' => 'nullable|string',
+            'frekuensi' => 'nullable|string',
+            'dosis' => 'nullable|string',
+            'satuan' => 'nullable|string',
+        ]);
+
+        $data = [
+            'no_resep' => $request->no_resep,
+            'kode_brng' => $request->kode_brng,
+            'aturan_pakai' => $request->aturan_pakai,
+            'keterangan' => $request->keterangan,
+            'frekuensi' => $request->frekuensi,
+            'dosis' => $request->dosis,
+            'satuan' => $request->satuan,
+            'nik_petugas' => auth()->user()->username ?? '-',
+            'updated_at' => now(),
+        ];
+
+        DB::table('rsia_ppra_resep_verifikasi')->updateOrInsert(
+            ['no_resep' => $request->no_resep, 'kode_brng' => $request->kode_brng],
+            $data
+        );
+
+        return ApiResponse::success('Data verifikasi PPRA berhasil disimpan', $data);
+    }
+
+    public function telaah(Request $request)
+    {
+        $request->validate([
+            'no_resep' => 'required|string',
+            'kode_brng' => 'required|string',
+            'status_telaah' => 'required|string', // SESUAI, TIDAK SESUAI
+            'catatan_telaah' => 'nullable|string',
+        ]);
+
+        $data = [
+            'petugas_telaah' => auth()->user()->username ?? '-',
+            'status_telaah' => $request->status_telaah,
+            'catatan_telaah' => $request->catatan_telaah,
+            'tgl_telaah' => now(),
+            'updated_at' => now(),
+        ];
+
+        DB::table('rsia_ppra_resep_verifikasi')->updateOrInsert(
+            ['no_resep' => $request->no_resep, 'kode_brng' => $request->kode_brng],
+            $data
+        );
+
+        return ApiResponse::success('Telaah apoteker berhasil disimpan', $data);
+    }
+
+    public function approve(Request $request)
+    {
+        $request->validate([
+            'no_resep' => 'required|string',
+            'kode_brng' => 'required|string',
+            'status_persetujuan' => 'required|string', // ACC, REJECT
+            'catatan_persetujuan' => 'nullable|string',
+        ]);
+
+        $data = [
+            'petugas_persetujuan' => auth()->user()->username ?? '-',
+            'status_persetujuan' => $request->status_persetujuan,
+            'catatan_persetujuan' => $request->catatan_persetujuan,
+            'tgl_persetujuan' => now(),
+            'updated_at' => now(),
+        ];
+
+        DB::table('rsia_ppra_resep_verifikasi')->updateOrInsert(
+            ['no_resep' => $request->no_resep, 'kode_brng' => $request->kode_brng],
+            $data
+        );
+
+        return ApiResponse::success('Persetujuan ketua PPRA berhasil disimpan', $data);
+    }
+
+    public function verifyWa(Request $request)
+    {
+        $request->validate([
+            'command' => 'required|string', // ACC, TOLAK
+            'code' => 'required|string',    // 4-digit short_code
+            'comment' => 'nullable|string',
+            'sender' => 'required|string',  // WA Number (e.g. 628123...)
+        ]);
+
+        // 1. Map phone number to employee
+        $cleanSender = preg_replace('/[^0-9]/', '', $request->sender);
+        // Usually ends with the actual number (ignoring 62/0/+)
+        $searchPhone = substr($cleanSender, -10); 
+
+        $petugas = DB::table('petugas')
+            ->join('rsia_tim_ppra', 'petugas.nip', '=', 'rsia_tim_ppra.nik')
+            ->where('petugas.no_telp', 'like', '%' . $searchPhone)
+            ->select('petugas.nip', 'rsia_tim_ppra.jabatan')
+            ->first();
+
+        if (!$petugas) {
+            return ApiResponse::error('Nomor pengirim tidak terdaftar sebagai Tim PPRA', 403);
+        }
+
+        // 2. Find prescription by short_code
+        $log = DB::table('rsia_ppra_notif_log')
+            ->where('short_code', $request->code)
+            ->first();
+
+        if (!$log) {
+            return ApiResponse::error('Kode verifikasi tidak valid atau sudah kadaluarsa', 404);
+        }
+
+        $data = [
+            'updated_at' => now(),
+        ];
+
+        // 3. Logic based on role and command
+        $status_msg = "";
+        if (str_contains(strtolower($petugas->jabatan), 'apoteker') || str_contains(strtolower($petugas->jabatan), 'farmasi')) {
+            // Pharmacist Review (Telaah)
+            $data['petugas_telaah'] = $petugas->nip;
+            $data['status_telaah'] = strtoupper($request->command) == 'ACC' ? 'SESUAI' : 'TIDAK SESUAI';
+            $data['catatan_telaah'] = $request->comment;
+            $data['tgl_telaah'] = now();
+            $status_msg = "Telaah apoteker berhasil diperbarui via WA";
+        } else {
+            // Chairman Approval
+            $data['petugas_persetujuan'] = $petugas->nip;
+            $data['status_persetujuan'] = strtoupper($request->command) == 'ACC' ? 'ACC' : 'REJECT';
+            $data['catatan_persetujuan'] = $request->comment;
+            $data['tgl_persetujuan'] = now();
+            $status_msg = "Persetujuan ketua berhasil diperbarui via WA";
+        }
+
+        DB::table('rsia_ppra_resep_verifikasi')->updateOrInsert(
+            ['no_resep' => $log->no_resep, 'kode_brng' => $log->kode_brng],
+            $data
+        );
+
+        return ApiResponse::success($status_msg, [
+            'no_resep' => $log->no_resep,
+            'kode_brng' => $log->kode_brng,
+            'role' => $petugas->jabatan,
+            'status' => strtoupper($request->command)
+        ]);
+    }
+
+    public function show(Request $request)
+    {
+        $no_resep = $request->query('no_resep');
+        $kode_brng = $request->query('kode_brng');
+
+        $data = DB::table('rsia_ppra_resep_verifikasi')
+            ->where('no_resep', $no_resep)
+            ->where('kode_brng', $kode_brng)
+            ->first();
+
+        return ApiResponse::success('Data verifikasi PPRA berhasil diambil', $data);
+    }
+}

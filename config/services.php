@@ -56,4 +56,7 @@ return [
         'url' => env('SNOWSTORM_URL', 'http://localhost:8080'),
     ],
 
+    'n8n' => [
+        'url' => env('N8N_URL', 'http://localhost:5678'),
+    ],
 ];

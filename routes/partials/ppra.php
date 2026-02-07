@@ -11,4 +11,11 @@ Route::prefix('ppra')->middleware(['auth:aes'])->group(function () {
     // Mapping Obat
     Route::get('mapping-obat/search-obat', [\App\Http\Controllers\v2\RsiaPpraMappingObatController::class, 'searchObat']);
     Route::apiResource('mapping-obat', \App\Http\Controllers\v2\RsiaPpraMappingObatController::class);
+
+    Route::get('laporan', [\App\Http\Controllers\v2\RsiaPpraReportController::class, 'laporan']);
+    Route::post('verifikasi', [\App\Http\Controllers\v2\RsiaPpraVerificationController::class, 'store']);
+    Route::post('verifikasi/telaah', [\App\Http\Controllers\v2\RsiaPpraVerificationController::class, 'telaah']);
+    Route::post('verifikasi/approve', [\App\Http\Controllers\v2\RsiaPpraVerificationController::class, 'approve']);
+    Route::post('verifikasi-wa', [\App\Http\Controllers\v2\RsiaPpraVerificationController::class, 'verifyWa']);
+    Route::get('verifikasi', [\App\Http\Controllers\v2\RsiaPpraVerificationController::class, 'show']);
 });
