@@ -49,7 +49,16 @@ class SendPpraWaNotifications extends Command
                 'ro.no_rawat',
                 'rp.no_rkm_medis'
             )
-            ->groupBy('ro.no_resep', 'dpo.kode_brng')
+            ->groupBy(
+                'ro.no_resep', 
+                'dpo.kode_brng', 
+                'db.nama_brng', 
+                'rd.aturan_pakai', 
+                'dpo.jml', 
+                'p.nm_pasien', 
+                'ro.no_rawat', 
+                'rp.no_rkm_medis'
+            )
             ->get();
 
         if ($newPrescriptions->isEmpty()) {
