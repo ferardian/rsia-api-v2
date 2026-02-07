@@ -25,20 +25,28 @@ class RsiaRemindObat extends Command
     {
         $this->info("Checking for scheduled medication reminders...");
 
-        // 1. Housekeeping (Cleanup data lama > 30 hari)
-        // Dilakukan setiap kali command ini jalan agar database tetap ramping
+        // 1. Housekeeping (Cleanup data)
         try {
-            $cleanupDate = now()->subDays(30)->format('Y-m-d H:i:s');
+            // Hard Cleanup: Hapus SEMUA data > 30 hari (termasuk pending/failed)
+            $cleanupHardDate = now()->subDays(30)->format('Y-m-d H:i:s');
             
             DB::table('rsia_medication_schedules')
-                ->where('created_at', '<', $cleanupDate)
+                ->where('created_at', '<', $cleanupHardDate)
                 ->delete();
 
             DB::table('rsia_resep_obat_terkirim')
-                ->where('created_at', '<', $cleanupDate)
+                ->where('created_at', '<', $cleanupHardDate)
+                ->delete();
+
+            // Aggressive Cleanup: Hapus yang sudah SUKSES (sent) > 3 hari
+            // Agar history tetap ada sebentar untuk audit, tapi tidak mengendap lama
+            $cleanupSentDate = now()->subDays(3)->format('Y-m-d H:i:s');
+            DB::table('rsia_medication_schedules')
+                ->where('status', 'sent')
+                ->where('sent_at', '<', $cleanupSentDate)
                 ->delete();
                 
-            $this->info("Cleanup completed for data older than 30 days.");
+            $this->info("Housekeeping: 30-day hard cleanup & 3-day 'sent' cleanup completed.");
         } catch (\Exception $e) {
             $this->error("Cleanup failed: " . $e->getMessage());
         }
