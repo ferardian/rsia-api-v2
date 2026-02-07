@@ -179,7 +179,7 @@ class RsiaPpraReportController extends Controller
             }
         }
 
-        return ApiResponse::success('Laporan PPRA berhasil diambil', $finalData);
+        return ApiResponse::successWithData($finalData, 'Laporan PPRA berhasil diambil');
     }
 
     private function parseAturanPakai($string)
