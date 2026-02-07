@@ -108,7 +108,7 @@ class RsiaPpraVerificationController extends Controller
         $petugas = DB::table('petugas')
             ->join('rsia_tim_ppra', 'petugas.nip', '=', 'rsia_tim_ppra.nik')
             ->where('petugas.no_telp', 'like', '%' . $searchPhone)
-            ->select('petugas.nip', 'rsia_tim_ppra.jabatan')
+            ->select('petugas.nip', 'rsia_tim_ppra.jabatan', 'rsia_tim_ppra.role')
             ->first();
 
         if (!$petugas) {
@@ -130,7 +130,12 @@ class RsiaPpraVerificationController extends Controller
 
         // 3. Logic based on role and command
         $status_msg = "";
-        if (str_contains(strtolower($petugas->jabatan), 'apoteker') || str_contains(strtolower($petugas->jabatan), 'farmasi')) {
+        if (
+            str_contains(strtolower($petugas->jabatan), 'apoteker') || 
+            str_contains(strtolower($petugas->jabatan), 'farmasi') ||
+            str_contains(strtolower($petugas->role), 'apoteker') || 
+            str_contains(strtolower($petugas->role), 'farmasi')
+        ) {
             // Pharmacist Review (Telaah)
             $data['petugas_telaah'] = $petugas->nip;
             $data['status_telaah'] = strtoupper($request->command) == 'ACC' ? 'SESUAI' : 'TIDAK SESUAI';
