@@ -11,7 +11,10 @@ class RsiaPpraMappingObatController extends Controller
 {
     public function index(Request $request)
     {
-        $query = RsiaPpraMappingObat::with('barang');
+        $query = RsiaPpraMappingObat::select('rsia_ppra_mapping_obat.*')
+            ->join('databarang', 'rsia_ppra_mapping_obat.kode_brng', '=', 'databarang.kode_brng')
+            ->with('barang')
+            ->orderBy('databarang.nama_brng', 'asc');
 
         if ($request->has('keyword') && $request->keyword != '') {
             $keyword = $request->keyword;
