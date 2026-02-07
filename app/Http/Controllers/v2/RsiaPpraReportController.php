@@ -19,20 +19,12 @@ class RsiaPpraReportController extends Controller
         $query = DB::table('resep_obat')
             ->join('reg_periksa', 'resep_obat.no_rawat', '=', 'reg_periksa.no_rawat')
             ->join('pasien', 'reg_periksa.no_rkm_medis', '=', 'pasien.no_rkm_medis')
-            ->join('detail_pemberian_obat', function($join) {
-                $join->on('resep_obat.no_rawat', '=', 'detail_pemberian_obat.no_rawat')
-                    ->on('resep_obat.tgl_perawatan', '=', 'detail_pemberian_obat.tgl_perawatan')
-                    ->on('resep_obat.jam', '=', 'detail_pemberian_obat.jam');
-            })
-            ->join('rsia_ppra_mapping_obat', 'detail_pemberian_obat.kode_brng', '=', 'rsia_ppra_mapping_obat.kode_brng')
-            ->join('databarang', 'detail_pemberian_obat.kode_brng', '=', 'databarang.kode_brng')
-            ->leftJoin('resep_dokter', function($join) {
-                $join->on('resep_obat.no_resep', '=', 'resep_dokter.no_resep')
-                    ->on('detail_pemberian_obat.kode_brng', '=', 'resep_dokter.kode_brng');
-            })
+            ->join('resep_dokter', 'resep_obat.no_resep', '=', 'resep_dokter.no_resep')
+            ->join('rsia_ppra_mapping_obat', 'resep_dokter.kode_brng', '=', 'rsia_ppra_mapping_obat.kode_brng')
+            ->join('databarang', 'resep_dokter.kode_brng', '=', 'databarang.kode_brng')
             ->leftJoin('rsia_ppra_resep_verifikasi', function($join) {
                 $join->on('resep_obat.no_resep', '=', 'rsia_ppra_resep_verifikasi.no_resep')
-                    ->on('detail_pemberian_obat.kode_brng', '=', 'rsia_ppra_resep_verifikasi.kode_brng');
+                    ->on('resep_dokter.kode_brng', '=', 'rsia_ppra_resep_verifikasi.kode_brng');
             })
             ->whereBetween('resep_obat.tgl_perawatan', [$start, $end])
             ->where('reg_periksa.status_lanjut', 'Ranap')
@@ -47,14 +39,14 @@ class RsiaPpraReportController extends Controller
                 'rsia_ppra_mapping_obat.rute_pemberian',
                 'rsia_ppra_mapping_obat.nilai_ddd_who',
                 'resep_dokter.aturan_pakai as aturan_pakai_dokter',
+                'resep_dokter.jml',
                 'rsia_ppra_resep_verifikasi.aturan_pakai as aturan_pakai_verif',
                 'rsia_ppra_resep_verifikasi.status_telaah',
                 'rsia_ppra_resep_verifikasi.status_persetujuan',
                 'rsia_ppra_resep_verifikasi.catatan_telaah',
                 'rsia_ppra_resep_verifikasi.catatan_persetujuan',
-                'detail_pemberian_obat.jml',
-                'detail_pemberian_obat.tgl_perawatan',
-                'detail_pemberian_obat.jam',
+                'resep_obat.tgl_perawatan',
+                'resep_obat.jam',
                 'databarang.kode_sat',
                 'databarang.isi'
             ]);
