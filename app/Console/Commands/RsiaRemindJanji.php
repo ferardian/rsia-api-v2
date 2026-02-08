@@ -47,7 +47,11 @@ class RsiaRemindJanji extends Command
                     ->on('booking_registrasi.tanggal_periksa', '=', 'reg_periksa.tgl_registrasi');
             })
             ->where('booking_registrasi.tanggal_periksa', $date)
-            ->where('booking_registrasi.status', 'Belum')
+            ->whereIn('booking_registrasi.status', ['Belum', 'Terdaftar'])
+            ->where(function($q) {
+                $q->whereNull('reg_periksa.stts')
+                  ->orWhere('reg_periksa.stts', 'Belum');
+            })
             ->select(
                 'booking_registrasi.*',
                 'pasien.nm_pasien',
