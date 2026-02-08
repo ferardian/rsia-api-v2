@@ -47,6 +47,12 @@ class RsiaKeluargaPasienController extends Controller
             'no_rkm_medis_keluarga' => 'required|exists:pasien,no_rkm_medis',
             'tgl_lahir_keluarga'    => 'required|date_format:Y-m-d', // Format verification
             'hubungan'              => 'required|string',
+        ], [
+            'no_rkm_medis_keluarga.required' => 'Nomor Rekam Medis wajib diisi',
+            'no_rkm_medis_keluarga.exists'   => 'Nomor Rekam Medis tidak ditemukan di database RS',
+            'tgl_lahir_keluarga.required'    => 'Tanggal lahir wajib diisi',
+            'tgl_lahir_keluarga.date_format' => 'Format tanggal lahir tidak sesuai (YYYY-MM-DD)',
+            'hubungan.required'              => 'Hubungan keluarga wajib dipilih',
         ]);
 
         $user = Auth::guard('pasien')->user();
