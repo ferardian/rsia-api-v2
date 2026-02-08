@@ -128,9 +128,9 @@ class RsiaRemindJanji extends Command
         $jam = substr($apt->jam_reg ?? '00:00:00', 0, 5);
         
         if ($type == 'reminder_h1') {
-            $body = "$greeting {$apt->nm_pasien}, mengingatkan besok pada tanggal {$apt->tanggal_periksa} pukul {$jam} memiliki jadwal pemeriksaan di {$apt->nm_poli}. Klik untuk detail.";
+            $body = "$greeting {$apt->nm_pasien}, mengingatkan bahwa besok pada tanggal {$apt->tanggal_periksa} pukul {$jam} Anda memiliki jadwal pemeriksaan di {$apt->nm_poli}. Klik untuk detail.";
         } else {
-            $body = "$greeting {$apt->nm_pasien}, mengingatkan hari ini memiliki jadwal pemeriksaan di {$apt->nm_poli} pukul {$jam}. Klik untuk detail.";
+            $body = "$greeting {$apt->nm_pasien}, mengingatkan bahwa hari ini Anda memiliki jadwal pemeriksaan di {$apt->nm_poli} pukul {$jam}. Klik untuk detail.";
         }
 
         foreach ($topics as $topic) {
