@@ -6,6 +6,7 @@ use App\Helpers\ApiResponse;
 use App\Http\Controllers\Controller;
 use App\Models\Pasien;
 use App\Models\RsiaKeluargaPasien;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Http\Request;
 
 class RsiaKeluargaPasienController extends Controller
@@ -16,7 +17,7 @@ class RsiaKeluargaPasienController extends Controller
         // Karena ini endpoint API, kita asumsikan user kirim no_rkm_medis nya
         // Atau ambil dari user yang sedang login jika ada relasi user->pasien
         
-        $user = $request->user();
+        $user = Auth::guard('pasien')->user();
         if (!$user) {
              return ApiResponse::error('Unauthorized', 'unauthorized', null, 401);
         }
@@ -48,7 +49,10 @@ class RsiaKeluargaPasienController extends Controller
             'hubungan'              => 'required|string',
         ]);
 
-        $user = $request->user();
+        $user = Auth::guard('pasien')->user();
+        if (!$user) {
+             return ApiResponse::error('Unauthorized', 'unauthorized', null, 401);
+        }
         $noRkmMedisMaster = $user->no_rkm_medis;
 
         if (!$noRkmMedisMaster) {
@@ -96,7 +100,10 @@ class RsiaKeluargaPasienController extends Controller
             'no_rkm_medis_keluarga' => 'required',
         ]);
 
-        $user = $request->user();
+        $user = Auth::guard('pasien')->user();
+        if (!$user) {
+             return ApiResponse::error('Unauthorized', 'unauthorized', null, 401);
+        }
         $noRkmMedisMaster = $user->no_rkm_medis;
 
         $delete = RsiaKeluargaPasien::where('no_rkm_medis_master', $noRkmMedisMaster)
