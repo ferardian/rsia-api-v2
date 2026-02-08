@@ -75,6 +75,38 @@ class RsiaKeluargaPasienController extends Controller
         if ($pasienKeluarga->tgl_lahir !== $request->tgl_lahir_keluarga) {
             return ApiResponse::error('Verifikasi Gagal: Tanggal lahir tidak cocok dengan data pasien.', 'verification_failed', null, 400);
         }
+
+        // Logic check: Usia dan Hubungan
+        $masterDob = \Carbon\Carbon::parse($user->tgl_lahir);
+        $memberDob = \Carbon\Carbon::parse($request->tgl_lahir_keluarga); // atau $pasienKeluarga->tgl_lahir
+        $diffYears = $masterDob->diffInYears($memberDob, false); // Positif jika Member lebih muda (lahir belakangan)
+
+        switch ($request->hubungan) {
+            case 'Anak':
+                // User (Ortu) harus lebih tua dari Member (Anak)
+                // Minimal beda 12 tahun (asumsi biologis/legal minimal)
+                if ($diffYears < 12) {
+                    return ApiResponse::error('Logika Error: Usia orang tua tidak valid untuk memiliki anak dengan usia tersebut (Terlalu muda/sebaya)', 'logic_error', null, 400);
+                }
+                break;
+            
+            case 'Ayah':
+            case 'Ibu':
+                // User (Anak) harus lebih muda dari Member (Ortu)
+                // Diff harus negatif, minimal -12
+                if ($diffYears > -12) {
+                     return ApiResponse::error('Logika Error: Usia anak tidak valid untuk memiliki orang tua dengan usia tersebut', 'logic_error', null, 400);
+                }
+                break;
+            
+            case 'Suami':
+            case 'Istri':
+                // Suami Istri idealnya dewasa, misal 17 tahun ke atas
+                if ($masterDob->age < 15 || $memberDob->age < 15) {
+                    return ApiResponse::error('Logika Error: Usia suami/istri belum cukup umur perkimpoian', 'logic_error', null, 400);
+                }
+                break;
+        }
         
         // 2. Cek apakah sudah ada (Prevent Duplicate)
         $exists = RsiaKeluargaPasien::where('no_rkm_medis_master', $noRkmMedisMaster)
