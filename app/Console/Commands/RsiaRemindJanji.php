@@ -115,10 +115,23 @@ class RsiaRemindJanji extends Command
             $topics[] = "pasien_$rmMaster";
         }
 
-        $topics = array_unique($topics);
+        $hour = now()->hour;
+        $greeting = 'Selamat Malam';
+        if ($hour >= 5 && $hour < 11) {
+            $greeting = 'Selamat Pagi';
+        } elseif ($hour >= 11 && $hour < 15) {
+            $greeting = 'Selamat Siang';
+        } elseif ($hour >= 15 && $hour < 18) {
+            $greeting = 'Selamat Sore';
+        }
 
         $jam = substr($apt->jam_reg ?? '00:00:00', 0, 5);
-        $body = "Yth. Pasien, mengingatkan jadwal pemeriksaan {$apt->nm_pasien} pada {$apt->tanggal_periksa} pukul {$jam} di {$apt->nm_poli}. Klik untuk detail.";
+        
+        if ($type == 'reminder_h1') {
+            $body = "$greeting Bapak/Ibu, mengingatkan besok pada tanggal {$apt->tanggal_periksa} pukul {$jam}, {$apt->nm_pasien} memiliki jadwal pemeriksaan di {$apt->nm_poli}. Klik untuk detail.";
+        } else {
+            $body = "$greeting Bapak/Ibu, mengingatkan hari ini {$apt->nm_pasien} memiliki jadwal pemeriksaan di {$apt->nm_poli} pukul {$jam}. Klik untuk detail.";
+        }
 
         foreach ($topics as $topic) {
             try {
