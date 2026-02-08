@@ -96,22 +96,21 @@ class RsiaRemindObat extends Command
                 $title = "Waktunya Minum Obat 💊";
                 $body = "$greeting $nmPasien, saatnya minum obat Anda. Klik untuk detail.";
 
-                // 3. Build High Priority Message
+                // 3. Build High Priority Message (Data Only)
+                // Kita kirim sebagai Data Message agar Mobile App bisa handle UI-nya
+                // (terutama untuk menampilkan Large Icon di sebelah kanan)
                 $message = CloudMessage::withTarget('topic', $topic)
-                    ->withNotification(Notification::create($title, $body))
                     ->withData([
                         'type' => 'MEDICINE_REMINDER_DIRECT',
                         'topic' => $topic,
                         'meds' => $medList,
                         'route' => '/home',
+                        'title' => $title,
+                        'body' => $body,
+                        'image' => 'https://sim.rsIAaisyiyah.com/rsiapi-v2/public/logo-rsia-masakini.png',
                     ])
                     ->withAndroidConfig(AndroidConfig::fromArray([
                         'priority' => 'high',
-                        'notification' => [
-                            'sound' => 'default',
-                            'color' => '#2196F3',
-                            'image' => 'https://sim.rsIAaisyiyah.com/rsiapi-v2/public/logo-rsia-masakini.png',
-                        ],
                     ]));
 
                 // 4. Send via Firebase
