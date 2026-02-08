@@ -13,7 +13,7 @@ class RsiaRemindJanji extends Command
     /**
      * @var string
      */
-    protected $signature = 'rsia:remind-janji';
+    protected $signature = 'rsia:remind-janji {--h1} {--h0}';
 
     /**
      * @var string
@@ -22,15 +22,26 @@ class RsiaRemindJanji extends Command
 
     public function handle()
     {
-        $this->info("Checking for appointment reminders...");
+        $h1 = $this->option('h1');
+        $h0 = $this->option('h0');
 
-        // 1. Fetch Tomorrow's Appointments (H-1 Reminder)
-        $tomorrow = now()->addDay()->format('Y-m-d');
-        $this->processReminders($tomorrow, 'reminder_h1', 'Pengingat Jadwal Besok');
+        // Jika tidak ada opsi, jalankan keduanya (default)
+        if (!$h1 && !$h0) {
+            $h1 = true;
+            $h0 = true;
+        }
 
-        // 2. Fetch Today's Appointments (H-0 Reminder)
-        $today = now()->format('Y-m-d');
-        $this->processReminders($today, 'reminder_h0', 'Jadwal Pemeriksaan Hari Ini');
+        if ($h1) {
+            $this->info("Checking for H-1 appointment reminders...");
+            $tomorrow = now()->addDay()->format('Y-m-d');
+            $this->processReminders($tomorrow, 'reminder_h1', 'Pengingat Jadwal Besok');
+        }
+
+        if ($h0) {
+            $this->info("Checking for H-0 appointment reminders...");
+            $today = now()->format('Y-m-d');
+            $this->processReminders($today, 'reminder_h0', 'Jadwal Pemeriksaan Hari Ini');
+        }
 
         return 0;
     }
