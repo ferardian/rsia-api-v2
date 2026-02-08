@@ -38,7 +38,7 @@ class RsiaKeluargaPasienController extends Controller
         ->where('no_rkm_medis_master', $noRkmMedisMaster)
         ->get();
 
-        return ApiResponse::success($keluarga);
+        return ApiResponse::successWithData($keluarga);
     }
 
     public function store(Request $request)
@@ -91,7 +91,7 @@ class RsiaKeluargaPasienController extends Controller
             'hubungan'              => $request->hubungan,
         ]);
 
-        return ApiResponse::success($keluarga, 'Anggota keluarga berhasil ditambahkan');
+        return ApiResponse::successWithData($keluarga, 'Anggota keluarga berhasil ditambahkan');
     }
 
     public function destroy(Request $request)
@@ -111,7 +111,7 @@ class RsiaKeluargaPasienController extends Controller
             ->delete();
 
         if ($delete) {
-            return ApiResponse::success(null, 'Anggota keluarga berhasil dihapus');
+            return ApiResponse::success('Anggota keluarga berhasil dihapus');
         } else {
             return ApiResponse::error('Gagal menghapus anggota keluarga / data tidak ditemukan', 'delete_failed', null, 400);
         }
