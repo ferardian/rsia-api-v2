@@ -64,4 +64,8 @@ Route::middleware(['claim:role,pegawai|dokter|pasien'])->prefix('pasien')->group
     // ==================== PASIEN
     Route::apiResource('/', \App\Http\Controllers\v2\PasienController::class)->parameters(['' => 'no_rkm_medis']);
     Orion::resource('', \App\Http\Controllers\Orion\PasienController::class)->only('search')->parameters(['pasien' => 'no_rkm_medis']);
+    // Family Member Management
+    Route::get('/keluarga', [\App\Http\Controllers\v2\RsiaKeluargaPasienController::class, 'index']);
+    Route::post('/keluarga', [\App\Http\Controllers\v2\RsiaKeluargaPasienController::class, 'store']);
+    Route::delete('/keluarga', [\App\Http\Controllers\v2\RsiaKeluargaPasienController::class, 'destroy']);
 });
