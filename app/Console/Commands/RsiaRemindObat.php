@@ -110,6 +110,7 @@ class RsiaRemindObat extends Command
                         'notification' => [
                             'sound' => 'default',
                             'color' => '#2196F3',
+                            'image' => 'https://sim.rsIAaisyiyah.com/rsiapi-v2/public/logo-rsia-masakini.png',
                         ],
                     ]));
 
