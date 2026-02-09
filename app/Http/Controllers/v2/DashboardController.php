@@ -480,7 +480,7 @@ class DashboardController extends Controller
     /**
      * Shorten poli name for display
      */
-    private function shortenPoliName($name)
+    private function shortenPoliName($name, $group = false)
     {
         $originalName = strtolower($name);
 
@@ -491,9 +491,11 @@ class DashboardController extends Controller
 
         // Determine suffix based on original name
         $suffix = '';
-        if (str_contains($originalName, 'sore')) $suffix = ' (Sore)';
-        elseif (str_contains($originalName, 'siang')) $suffix = ' (Siang)';
-        elseif (str_contains($originalName, 'malam')) $suffix = ' (Malam)';
+        if (!$group) {
+            if (str_contains($originalName, 'sore')) $suffix = ' (Sore)';
+            elseif (str_contains($originalName, 'siang')) $suffix = ' (Siang)';
+            elseif (str_contains($originalName, 'malam')) $suffix = ' (Malam)';
+        }
 
         // Remove common prefixes/suffixes from the name for processing
         $name = str_replace(['Poli ', 'Klinik ', 'Spesialis '], '', $name);
@@ -516,14 +518,7 @@ class DashboardController extends Controller
         elseif (str_contains($name, 'Rehab')) $name = 'Rehab Medik';
         elseif (str_contains($name, 'Gizi')) $name = 'Gizi';
         
-        // Clean up any remaining braces or time words in the base name if they were matched above
-        // (Though strictly replacing the whole string with 'Anak' etc handles this)
-
-        // Add "Poli" prefix back except for IGD, and append identified suffix
-        // If we replaced the name with a specific category (e.g. 'Anak'), use that.
-        // Otherwise use the cleaned name.
-        
-        return 'Poli ' . trim($name) . $suffix;
+        return ($name === 'IGD' ? '' : 'Poli ') . trim($name) . $suffix;
     }
 
     /**
@@ -723,10 +718,30 @@ class DashboardController extends Controller
             $kd_poli = $request->kd_poli;
             $kd_dokter = $request->kd_dokter;
 
-            $baseQuery = RegPeriksa::whereBetween('tgl_registrasi', [$tgl_awal, $tgl_akhir]);
+            $baseQuery = RegPeriksa::where('reg_periksa.stts', '!=', 'Batal');
             
-            if ($status_lanjut && $status_lanjut !== 'all') {
-                $baseQuery->where('reg_periksa.status_lanjut', $status_lanjut);
+            if ($status_lanjut === 'Ranap') {
+                $baseQuery->join('kamar_inap', 'reg_periksa.no_rawat', '=', 'kamar_inap.no_rawat')
+                    ->whereNotIn('kamar_inap.stts_pulang', ['Pindah Kamar', '-', ''])
+                    ->whereBetween('kamar_inap.tgl_keluar', [$tgl_awal, $tgl_akhir]);
+            } elseif ($status_lanjut === 'Ralan') {
+                $baseQuery->whereBetween('reg_periksa.tgl_registrasi', [$tgl_awal, $tgl_akhir])
+                    ->where('reg_periksa.status_lanjut', 'Ralan');
+            } else {
+                // Gapunan / All: Hybrid logic
+                $baseQuery->leftJoin('kamar_inap', function($join) {
+                    $join->on('reg_periksa.no_rawat', '=', 'kamar_inap.no_rawat')
+                         ->whereNotIn('kamar_inap.stts_pulang', ['Pindah Kamar', '-', '']);
+                })
+                ->where(function($q) use ($tgl_awal, $tgl_akhir) {
+                    $q->where(function($sq) use ($tgl_awal, $tgl_akhir) {
+                        $sq->where('reg_periksa.status_lanjut', 'Ralan')
+                           ->whereBetween('reg_periksa.tgl_registrasi', [$tgl_awal, $tgl_akhir]);
+                    })->orWhere(function($sq) use ($tgl_awal, $tgl_akhir) {
+                        $sq->where('reg_periksa.status_lanjut', 'Ranap')
+                           ->whereBetween('kamar_inap.tgl_keluar', [$tgl_awal, $tgl_akhir]);
+                    });
+                });
             }
 
             if ($kd_poli && $kd_poli !== 'all') {
@@ -737,16 +752,13 @@ class DashboardController extends Controller
                 $baseQuery->where('reg_periksa.kd_dokter', $kd_dokter);
             }
 
-            // Tambahkan filter untuk mengecualikan status 'Batal'
-            $baseQuery->where('reg_periksa.stts', '!=', 'Batal');
-
             // 1. Baru vs Lama & Gender
             $registrasi = (clone $baseQuery)
                 ->join('pasien', 'reg_periksa.no_rkm_medis', '=', 'pasien.no_rkm_medis')
                 ->selectRaw("
                     reg_periksa.stts_daftar,
                     pasien.jk,
-                    COUNT(*) as total
+                    COUNT(DISTINCT reg_periksa.no_rawat) as total
                 ")
                 ->groupBy('reg_periksa.stts_daftar', 'pasien.jk')
                 ->get();
@@ -759,13 +771,30 @@ class DashboardController extends Controller
                 ->orderBy('total', 'desc')
                 ->get();
 
-            // 3. Berdasarkan Poli
-            $poli = (clone $baseQuery)
+            // 3. Berdasarkan Poli (Grouped)
+            $poliData = (clone $baseQuery)
                 ->join('poliklinik', 'reg_periksa.kd_poli', '=', 'poliklinik.kd_poli')
                 ->select('poliklinik.nm_poli as label', DB::raw('COUNT(*) as total'))
                 ->groupBy('poliklinik.nm_poli')
-                ->orderBy('total', 'desc')
                 ->get();
+
+            $groupedPoli = [];
+            foreach ($poliData as $p) {
+                // Group = true: Ignore time suffixes (Sore, Siang, Malam)
+                $label = $this->shortenPoliName($p->label, true); 
+                if (isset($groupedPoli[$label])) {
+                    $groupedPoli[$label] += $p->total;
+                } else {
+                    $groupedPoli[$label] = $p->total;
+                }
+            }
+
+            // Transform to array of objects and sort
+            $poli = [];
+            foreach ($groupedPoli as $label => $total) {
+                $poli[] = ['label' => $label, 'total' => $total];
+            }
+            usort($poli, fn($a, $b) => $b['total'] <=> $a['total']);
 
             // 4. Berdasarkan Dokter
             $dokter = (clone $baseQuery)
@@ -775,6 +804,106 @@ class DashboardController extends Controller
                 ->orderBy('total', 'desc')
                 ->limit(10) // Only top 10
                 ->get();
+
+            // 4.b Berdasarkan Bangsal (Hanya jika Ranap dilibatkan)
+            $bangsal = [];
+            if (!$status_lanjut || $status_lanjut === 'Ranap' || $status_lanjut === 'all') {
+                $bangsalQuery = (clone $baseQuery);
+                
+                // If not already joined in baseQuery (e.g. if it was Ralan but we are checking All)
+                // Actually, in Ranap/All we joined it. In Ralan we didn't.
+                if ($status_lanjut === 'Ralan') {
+                    // This case shouldn't happen based on the outside IF but for safety
+                    $bangsalQuery->join('kamar_inap', 'reg_periksa.no_rawat', '=', 'kamar_inap.no_rawat')
+                        ->whereNotIn('kamar_inap.stts_pulang', ['Pindah Kamar', '-', '']);
+                } elseif (!$status_lanjut || $status_lanjut === 'all') {
+                    // baseQuery already has leftJoin, but for breakdown we want inner join
+                    // However, we can just rely on the existing join or re-filter.
+                    // To be safe and clean, let's just make sure we have the columns.
+                }
+
+                $bangsalQuery->join('kamar', 'kamar_inap.kd_kamar', '=', 'kamar.kd_kamar')
+                    ->join('bangsal', 'kamar.kd_bangsal', '=', 'bangsal.kd_bangsal')
+                    ->where('kamar.kd_kamar', 'not like', '%BYA%')
+                    ->where('kamar.kd_kamar', 'not like', '%RG%')
+                    ->whereNotIn('kamar_inap.stts_pulang', ['Pindah Kamar', '-', '']); // double check for clean results
+                
+                $bangsalResults = $bangsalQuery
+                    ->select('bangsal.nm_bangsal as label', DB::raw('COUNT(DISTINCT reg_periksa.no_rawat) as total'))
+                    ->groupBy('bangsal.nm_bangsal')
+                    ->get();
+
+                $groupedBangsal = [];
+                foreach ($bangsalResults as $b) {
+                    $label = $this->normalizeWardName($b->label);
+                    if (isset($groupedBangsal[$label])) {
+                        $groupedBangsal[$label] += $b->total;
+                    } else {
+                        $groupedBangsal[$label] = $b->total;
+                    }
+                }
+
+                foreach ($groupedBangsal as $label => $total) {
+                    $bangsal[] = ['label' => $label, 'total' => $total];
+                }
+                usort($bangsal, fn($a, $b) => $b['total'] <=> $a['total']);
+
+                // 4.c Berdasarkan Kategori
+                $kategoriQuery = (clone $baseQuery);
+                
+                $kategoriResults = $kategoriQuery
+                    ->join('kamar', 'kamar_inap.kd_kamar', '=', 'kamar.kd_kamar')
+                    ->where('kamar.kd_kamar', 'not like', '%RG%')
+                    ->whereNotIn('kamar_inap.stts_pulang', ['Pindah Kamar', '-', ''])
+                    ->select('kamar.kd_kamar', DB::raw('COUNT(DISTINCT reg_periksa.no_rawat) as total'))
+                    ->groupBy('kamar.kd_kamar')
+                    ->get();
+
+                $groupedKategori = [
+                    'Anak' => 0,
+                    'Kandungan' => 0,
+                    'Perina' => 0,
+                    'ICU' => 0,
+                    'Isolasi' => 0,
+                    'Umum' => 0
+                ];
+
+                foreach ($kategoriResults as $kr) {
+                    $cat = $this->categorizeWard($kr->kd_kamar);
+                    if (isset($groupedKategori[$cat])) {
+                        $groupedKategori[$cat] += $kr->total;
+                    }
+                }
+
+                $kategoriBreakdown = [];
+                foreach ($groupedKategori as $label => $total) {
+                    $kategoriBreakdown[] = ['label' => $label, 'total' => $total];
+                }
+                usort($kategoriBreakdown, fn($a, $b) => $b['total'] <=> $a['total']);
+                $breakdownKategori = $kategoriBreakdown;
+
+                // 4.d Berdasarkan Kelas
+                $kelasQuery = (clone $baseQuery);
+                
+                $kelasResults = $kelasQuery
+                    ->join('kamar', 'kamar_inap.kd_kamar', '=', 'kamar.kd_kamar')
+                    ->where('kamar.kd_kamar', 'not like', '%BYA%')
+                    ->where('kamar.kd_kamar', 'not like', '%RG%')
+                    ->whereNotIn('kamar_inap.stts_pulang', ['Pindah Kamar', '-', ''])
+                    ->select('kamar.kelas', DB::raw('COUNT(DISTINCT reg_periksa.no_rawat) as total'))
+                    ->groupBy('kamar.kelas')
+                    ->get();
+
+                $kelasBreakdown = [];
+                foreach ($kelasResults as $kr) {
+                    $kelasBreakdown[] = ['label' => $kr->kelas, 'total' => $kr->total];
+                }
+                usort($kelasBreakdown, fn($a, $b) => $b['total'] <=> $a['total']);
+                $breakdownKelas = $kelasBreakdown;
+            } else {
+                $breakdownKategori = [];
+                $breakdownKelas = [];
+            }
 
             // 5. Keseluruhan Pasien (Hidup + Proses) - Berdasarkan ralat user
             $pasienKeluar = (clone $baseQuery)
@@ -805,6 +934,9 @@ class DashboardController extends Controller
                 'cara_bayar' => $caraBayar,
                 'poli' => $poli,
                 'dokter' => $dokter,
+                'bangsal' => $bangsal,
+                'kategori' => $breakdownKategori ?? [],
+                'kelas' => $breakdownKelas ?? [],
                 'summary' => [
                     'total' => $baseQuery->count(),
                     'baru' => $registrasi->where('stts_daftar', 'Baru')->sum('total'),
@@ -1034,5 +1166,73 @@ class DashboardController extends Controller
             \Log::error('Dashboard Visit Stats Error: ' . $e->getMessage());
             return ApiResponse::error('Failed to retrieve visit statistics: ' . $e->getMessage(), 'internal_server_error', null, 500);
         }
+    }
+
+    /**
+     * Normalize ward name for grouping
+     */
+    private function normalizeWardName($name)
+    {
+        // 1. Specific Keyword Mapping (for units with sub-units)
+        // ICU, PICU, NICU -> ICU
+        if (preg_match('/(ICU|PICU|NICU)/i', $name)) {
+            return 'ICU';
+        }
+
+        // ISOLASI -> ISOLASI (grouping all isolation/iso rooms)
+        if (stripos($name, 'ISOLASI') !== false || stripos($name, 'ISO') !== false) {
+            return 'ISOLASI';
+        }
+
+        // SITI KHADIJAH -> SITI KHADIJAH (excluding BAYI)
+        if (stripos($name, 'SITI KHADIJAH') !== false && stripos($name, 'BAYI') === false) {
+            return 'SITI KHADIJAH';
+        }
+
+        // SITI FATIMAH -> SITI FATIMAH (grouping AZZAHRA etc)
+        if (stripos($name, 'SITI FATIMAH') !== false) {
+            return 'SITI FATIMAH';
+        }
+
+        // SITI WALIDAH -> SITI WALIDAH
+        if (stripos($name, 'SITI WALIDAH') !== false) {
+            return 'SITI WALIDAH';
+        }
+
+        // 2. Generic Normalization (trailing numbers and parentheses)
+        $normalized = preg_replace('/\\s*\\(.*\\)$/', '', $name);
+        $normalized = preg_replace('/\\s*[0-9]+(\\.[0-9]+)?$/', '', $normalized);
+        $normalized = preg_replace('/\\s*[0-9]+$/', '', $normalized);
+        
+        return trim($normalized);
+    }
+
+    /**
+     * Categorize ward for grouping
+     */
+    private function categorizeWard($kd_kamar)
+    {
+        if (preg_match('/(ICU|PICU|NICU)/i', $kd_kamar)) {
+            return 'ICU';
+        }
+
+        if (stripos($kd_kamar, 'ISO') !== false) {
+            return 'Isolasi';
+        }
+
+        if (stripos($kd_kamar, 'BY') !== false) {
+            return 'Perina';
+        }
+
+        if (stripos($kd_kamar, 'Anak') !== false) {
+            return 'Anak';
+        }
+
+        if (stripos($kd_kamar, 'Kand') !== false) {
+            return 'Kandungan';
+        }
+
+        // Default to Umum
+        return 'Umum';
     }
 }
