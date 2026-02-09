@@ -107,7 +107,6 @@ class RsiaRemindObat extends Command
                         'route' => '/home',
                         'title' => $title,
                         'body' => $body,
-                        'image' => 'https://sim.rsIAaisyiyah.com/rsiapi-v2/public/logo-rsia-masakini.png',
                     ])
                     ->withAndroidConfig(AndroidConfig::fromArray([
                         'priority' => 'high',

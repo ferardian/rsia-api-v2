@@ -120,23 +120,46 @@ class RsiaNotifResep extends Command
 
     private function calculateSlots($noResep, $nmObat, $aturan, $jml, &$schedules)
     {
-        // Simple Parser logic mirroring Flutter
-        preg_match('/(\d+)x(\d+)/i', $aturan, $matches);
-        if (count($matches) < 3) return;
+        $aturan = strtolower($aturan);
+        $freq = 0;
+        $hours = [7]; // Default
 
-        $freq = (int)$matches[1];
+        // 1. Parse "3x1", "3 x 1", etc.
+        if (preg_match('/(\d+)\s*[xX]/i', $aturan, $matches)) {
+            $freq = (int)$matches[1];
+        } 
+        // 2. Fallback for common text
+        elseif (str_contains($aturan, 'tiga kali')) {
+            $freq = 3;
+        } elseif (str_contains($aturan, 'dua kali')) {
+            $freq = 2;
+        } elseif (str_contains($aturan, 'satu kali')) {
+            $freq = 1;
+        }
+
+        if ($freq == 0) return;
+
+        // Set hours based on frequency
+        if ($freq == 1) $hours = [7];
+        elseif ($freq == 2) $hours = [7, 19];
+        elseif ($freq == 3) $hours = [7, 13, 19];
+        elseif ($freq >= 4) $hours = [6, 12, 18, 0];
+
+        // Estimate duration based on JML (quantity)
         $days = (int)ceil($jml / $freq);
         if ($days > 30) $days = 30; // Cap at 30 days
-
-        $hours = [7]; // Default
-        if ($freq == 2) $hours = [7, 19];
-        if ($freq == 3) $hours = [7, 13, 19];
+        if ($days < 1) $days = 1;
 
         $startDate = now();
         for ($i = 0; $i < $days; $i++) {
             foreach ($hours as $h) {
+                // Offset calculation (30 mins before/after)
+                $offset = 0;
+                if (str_contains($aturan, 'sebelum makan')) $offset = -30;
+                elseif (str_contains($aturan, 'sesudah makan')) $offset = 30;
+
                 $dt = clone $startDate;
-                $dt->addDays($i)->setHour($h)->setMinute(0)->setSecond(0);
+                $dt->addDays($i)->setHour($h)->setMinute($offset)->setSecond(0);
                 
                 // Don't schedule for times that have already passed today
                 if ($dt->isPast()) continue;
