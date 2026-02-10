@@ -34,9 +34,13 @@ class RsiaPpraReportController extends Controller
                 $join->on('resep_obat.no_resep', '=', 'resep_dokter.no_resep')
                     ->on('detail_pemberian_obat.kode_brng', '=', 'resep_dokter.kode_brng');
             })
-            ->leftJoin('rsia_ppra_resep_verifikasi', function($join) {
-                $join->on('resep_obat.no_resep', '=', 'rsia_ppra_resep_verifikasi.no_resep')
-                    ->on('detail_pemberian_obat.kode_brng', '=', 'rsia_ppra_resep_verifikasi.kode_brng');
+            ->leftJoin('rsia_ppra_resep_verifikasi as rrv', function($join) {
+                $join->on('resep_obat.no_resep', '=', 'rrv.no_resep')
+                    ->on('detail_pemberian_obat.kode_brng', '=', 'rrv.kode_brng');
+            })
+            // Get latest weight from pemeriksaan_ranap
+            ->leftJoin(DB::raw('(SELECT no_rawat, berat FROM pemeriksaan_ranap WHERE berat IS NOT NULL AND berat > 0 ORDER BY tgl_perawatan DESC, jam_rawat DESC) as pr'), function($join) {
+                $join->on('resep_obat.no_rawat', '=', 'pr.no_rawat');
             })
             ->whereBetween('resep_obat.tgl_perawatan', [$start, $end])
             ->where('resep_obat.status', 'like', 'ranap%');
@@ -70,15 +74,16 @@ class RsiaPpraReportController extends Controller
             'rsia_ppra_mapping_obat.nilai_ddd_who',
             'resep_dokter.aturan_pakai as aturan_pakai_dokter',
             'detail_pemberian_obat.jml',
-            'rsia_ppra_resep_verifikasi.aturan_pakai as aturan_pakai_verif',
-            'rsia_ppra_resep_verifikasi.status_telaah',
-            'rsia_ppra_resep_verifikasi.status_persetujuan',
-            'rsia_ppra_resep_verifikasi.catatan_telaah',
-            'rsia_ppra_resep_verifikasi.catatan_persetujuan',
+            'rrv.aturan_pakai as aturan_pakai_verif',
+            'rrv.status_telaah',
+            'rrv.status_persetujuan',
+            'rrv.catatan_telaah',
+            'rrv.catatan_persetujuan',
             'resep_obat.tgl_perawatan',
             'resep_obat.jam',
             'databarang.kode_sat',
-            'databarang.isi'
+            'databarang.isi',
+            DB::raw('COALESCE(pr.berat, 0) as berat_badan')
         ]);
 
         $results = $query->get();
@@ -140,12 +145,31 @@ class RsiaPpraReportController extends Controller
                     }
                 }
 
-                $age = Carbon::parse($item->tgl_lahir)->age;
+                // Calculate detailed age
+                $usia = '-';
+                if ($item->tgl_lahir && $item->tgl_lahir != '0000-00-00') {
+                    $birthDate = Carbon::parse($item->tgl_lahir);
+                    $years = $birthDate->diffInYears(now());
+                    $months = $birthDate->copy()->addYears($years)->diffInMonths(now());
+                    $days = $birthDate->copy()->addYears($years)->addMonths($months)->diffInDays(now());
+                    
+                    if ($years > 0) {
+                        $usia = "{$years}th";
+                        if ($months > 0) $usia .= " {$months}bln";
+                    } elseif ($months > 0) {
+                        $usia = "{$months}bln";
+                        if ($days > 0) $usia .= " {$days}hr";
+                    } else {
+                        $usia = "{$days}hr";
+                    }
+                }
 
                 $data[$no_rawat] = [
                     'no_rawat' => $no_rawat,
-                    'nm_pasien' => $item->nm_pasien . ' (' . $age . ' th)',
+                    'nm_pasien' => $item->nm_pasien,
                     'no_rkm_medis' => $item->no_rkm_medis,
+                    'usia' => $usia,
+                    'berat_badan' => $item->berat_badan > 0 ? (float)$item->berat_badan . ' kg' : '-',
                     'nm_dokter' => $item->nm_dokter,
                     'tgl_masuk' => $tgl_masuk,
                     'diagnosa' => implode(', ', $diagnosa),
@@ -215,6 +239,8 @@ class RsiaPpraReportController extends Controller
                     'kode_brng' => $ab['kode_brng'],
                     'nm_pasien' => $rn['nm_pasien'],
                     'no_rkm_medis' => $rn['no_rkm_medis'],
+                    'usia' => $rn['usia'],
+                    'berat_badan' => $rn['berat_badan'],
                     'nm_dokter' => $rn['nm_dokter'],
                     'tgl_masuk' => $rn['tgl_masuk'],
                     'diagnosa' => $rn['diagnosa'],
