@@ -18,9 +18,11 @@ class SendPpraWaNotifications extends Command
 
         // 1. Ambil resep obat ralan/ranap yang mengandung obat dalam mapping PPRA
         // Filter: Yang belum ada di rsia_ppra_notif_log
+        // Filter: Hanya untuk pasien dengan dokter spesialis anak (S0003)
         $newPrescriptions = DB::table('resep_obat as ro')
             ->join('reg_periksa as rp', 'ro.no_rawat', '=', 'rp.no_rawat')
             ->join('pasien as p', 'rp.no_rkm_medis', '=', 'p.no_rkm_medis')
+            ->join('dokter as d', 'rp.kd_dokter', '=', 'd.kd_dokter')
             ->join('detail_pemberian_obat as dpo', function($join) {
                 $join->on('ro.no_rawat', '=', 'dpo.no_rawat')
                      ->on('ro.tgl_perawatan', '=', 'dpo.tgl_perawatan')
@@ -36,10 +38,16 @@ class SendPpraWaNotifications extends Command
                 $join->on('ro.no_resep', '=', 'log.no_resep')
                      ->on('dpo.kode_brng', '=', 'log.kode_brng');
             })
+            // Get latest weight from pemeriksaan_ranap
+            ->leftJoin(DB::raw('(SELECT no_rawat, berat FROM pemeriksaan_ranap WHERE berat IS NOT NULL AND berat > 0 ORDER BY tgl_perawatan DESC, jam_rawat DESC) as pr'), function($join) {
+                $join->on('ro.no_rawat', '=', 'pr.no_rawat');
+            })
             ->whereNull('log.no_resep')
-            // 🕒 Revert ke 1 jam agar aman untuk production setelah testing
-            ->where('ro.tgl_perawatan', '>=', now()->subHour()->toDateTimeString())
+            // � Filter 7 hari terakhir untuk catch semua resep yang belum terkirim
+            ->where('ro.tgl_perawatan', '>=', now()->subDays(7)->toDateTimeString())
             ->where('ro.status', 'like', 'ranap%')
+            // 🩺 Filter: Hanya dokter spesialis anak
+            ->where('d.kd_sps', 'S0003')
             ->select(
                 'ro.no_resep',
                 'dpo.kode_brng',
@@ -47,6 +55,8 @@ class SendPpraWaNotifications extends Command
                 DB::raw('COALESCE(rd.aturan_pakai, "-") as aturan_pakai'),
                 'dpo.jml',
                 'p.nm_pasien',
+                'p.tgl_lahir',
+                DB::raw('COALESCE(pr.berat, 0) as berat_badan'),
                 'ro.no_rawat',
                 'rp.no_rkm_medis'
             )
@@ -56,7 +66,9 @@ class SendPpraWaNotifications extends Command
                 'db.nama_brng', 
                 'rd.aturan_pakai', 
                 'dpo.jml', 
-                'p.nm_pasien', 
+                'p.nm_pasien',
+                'p.tgl_lahir',
+                'pr.berat',
                 'ro.no_rawat', 
                 'rp.no_rkm_medis'
             )
@@ -98,12 +110,35 @@ class SendPpraWaNotifications extends Command
                 $shortCode = str_pad(random_int(0, 9999), 4, '0', STR_PAD_LEFT);
             }
 
+            // Calculate age from birth date
+            $usia = '-';
+            if ($item->tgl_lahir && $item->tgl_lahir != '0000-00-00') {
+                $birthDate = Carbon::parse($item->tgl_lahir);
+                $years = $birthDate->diffInYears(now());
+                $months = $birthDate->copy()->addYears($years)->diffInMonths(now());
+                $days = $birthDate->copy()->addYears($years)->addMonths($months)->diffInDays(now());
+                
+                if ($years > 0) {
+                    $usia = "{$years} tahun";
+                    if ($months > 0) $usia .= " {$months} bulan";
+                } elseif ($months > 0) {
+                    $usia = "{$months} bulan";
+                    if ($days > 0) $usia .= " {$days} hari";
+                } else {
+                    $usia = "{$days} hari";
+                }
+            }
+            
+            $beratBadan = $item->berat_badan > 0 ? number_format($item->berat_badan, 1) . ' kg' : '-';
+
             // Persiapan Pesan (More Compact & Professional)
             $messageText = "🏥 *NOTIFIKASI PPRA - RSIA AISYIYAH*\n" .
                            "━━━━━━━━━━━━━━━━━━━\n" .
                            "💊 *Detail Resep Antibiotik:*\n" .
                            "• No. Resep: `{$item->no_resep}`\n" .
                            "• Pasien: *{$item->nm_pasien}*\n" .
+                           "• Usia: {$usia}\n" .
+                           "• Berat Badan: {$beratBadan}\n" .
                            "• Obat: _{$item->nama_brng}_\n" .
                            "• Dosis: *{$item->aturan_pakai}*\n" .
                            "━━━━━━━━━━━━━━━━━━━\n" .
