@@ -45,7 +45,14 @@ class FirebaseCloudMessaging
      * */
     public static function send(CloudMessage $msg)
     {
-        (new self)->messaging->send($msg);
+        try {
+            $response = (new self)->messaging->send($msg);
+            \Log::info("FCM Send Success", ['response' => $response]);
+            return $response;
+        } catch (\Exception $e) {
+            \Log::error("FCM Send Error: " . $e->getMessage(), ['message' => $msg]);
+            throw $e;
+        }
     }
 
     /**
