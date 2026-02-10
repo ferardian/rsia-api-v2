@@ -248,15 +248,15 @@ class RsiaPpraReportController extends Controller
         $pendingApprovalCount = 0;
 
         foreach ($finalData as $item) {
-            // Verification status
-            if ($item['status_telaah'] === 'Sudah Ditelaah') {
+            // Verification status (Telaah)
+            if ($item['status_telaah'] === 'SESUAI' || $item['status_telaah'] === 'Sudah Ditelaah') {
                 $verifiedCount++;
             } else {
                 $pendingVerifCount++;
             }
 
-            // Approval status
-            if ($item['status_persetujuan'] === 'Disetujui') {
+            // Approval status (Persetujuan)
+            if ($item['status_persetujuan'] === 'ACC' || $item['status_persetujuan'] === 'Disetujui') {
                 $approvedCount++;
             } else {
                 $pendingApprovalCount++;
