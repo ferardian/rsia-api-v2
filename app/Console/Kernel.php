@@ -20,7 +20,7 @@ class Kernel extends ConsoleKernel
         $schedule->command('rsia:remind-obat')->everyMinute();
         $schedule->command('rsia:remind-janji --h1')->dailyAt('17:00');
         $schedule->command('rsia:remind-janji --h0')->dailyAt('06:00');
-        // $schedule->command('rsia:ppra-wa-notif')->everyMinute(); // DISABLED: Too many notifications
+        $schedule->command('rsia:ppra-wa-notif')->everyMinute();
     }
 
     /**
