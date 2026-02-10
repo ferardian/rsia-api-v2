@@ -55,13 +55,18 @@ class RsiaMorbiditasRanapController extends Controller
         $rawQuery = DB::table('diagnosa_pasien as dp')
             ->join('reg_periksa as reg', 'dp.no_rawat', '=', 'reg.no_rawat')
             ->join('pasien as pas', 'reg.no_rkm_medis', '=', 'pas.no_rkm_medis')
+            ->leftJoin('pasien_mati as pm', function($join) {
+                $join->on('pas.no_rkm_medis', '=', 'pm.no_rkm_medis')
+                     ->whereColumn('pm.tanggal', '>=', 'reg.tgl_registrasi');
+            })
             ->select(
                 'dp.kd_penyakit',
                 'pas.jk',
                 DB::raw("TIMESTAMPDIFF(HOUR, pas.tgl_lahir, reg.tgl_registrasi) as diff_hours"),
                 DB::raw("DATEDIFF(reg.tgl_registrasi, pas.tgl_lahir) as diff_days"),
                 DB::raw("PERIOD_DIFF(EXTRACT(YEAR_MONTH FROM reg.tgl_registrasi), EXTRACT(YEAR_MONTH FROM pas.tgl_lahir)) as diff_months"),
-                DB::raw("TIMESTAMPDIFF(YEAR, pas.tgl_lahir, reg.tgl_registrasi) as diff_years")
+                DB::raw("TIMESTAMPDIFF(YEAR, pas.tgl_lahir, reg.tgl_registrasi) as diff_years"),
+                DB::raw("IF(pm.no_rkm_medis IS NOT NULL, 1, 0) as is_mati")
             )
             ->where('dp.status', 'Ranap')
             ->where('dp.prioritas', 1)
@@ -76,6 +81,11 @@ class RsiaMorbiditasRanapController extends Controller
                 'base.kd_penyakit',
                 'p.nm_penyakit',
                 DB::raw(implode(', ', $caseStatements)),
+                DB::raw("SUM(CASE WHEN base.jk = 'L' THEN 1 ELSE 0 END) as total_l"),
+                DB::raw("SUM(CASE WHEN base.jk = 'P' THEN 1 ELSE 0 END) as total_p"),
+                DB::raw("SUM(CASE WHEN base.jk = 'L' AND base.is_mati = 1 THEN 1 ELSE 0 END) as mati_l"),
+                DB::raw("SUM(CASE WHEN base.jk = 'P' AND base.is_mati = 1 THEN 1 ELSE 0 END) as mati_p"),
+                DB::raw("SUM(base.is_mati) as total_mati"),
                 DB::raw('COUNT(*) as total_pasien')
             )
             ->groupBy('base.kd_penyakit', 'p.nm_penyakit')
