@@ -240,7 +240,45 @@ class RsiaPpraReportController extends Controller
             }
         }
 
-        return ApiResponse::successWithData($finalData, 'Laporan PPRA berhasil diambil');
+        // Calculate status metrics for dashboard
+        $totalResep = count($finalData);
+        $verifiedCount = 0;
+        $pendingVerifCount = 0;
+        $approvedCount = 0;
+        $pendingApprovalCount = 0;
+
+        foreach ($finalData as $item) {
+            // Verification status
+            if ($item['status_telaah'] === 'Sudah Ditelaah') {
+                $verifiedCount++;
+            } else {
+                $pendingVerifCount++;
+            }
+
+            // Approval status
+            if ($item['status_persetujuan'] === 'Disetujui') {
+                $approvedCount++;
+            } else {
+                $pendingApprovalCount++;
+            }
+        }
+
+        $metrics = [
+            'total_resep' => $totalResep,
+            'verification' => [
+                'verified' => $verifiedCount,
+                'pending' => $pendingVerifCount
+            ],
+            'approval' => [
+                'approved' => $approvedCount,
+                'pending' => $pendingApprovalCount
+            ]
+        ];
+
+        return ApiResponse::successWithData([
+            'data' => $finalData,
+            'metrics' => $metrics
+        ], 'Laporan PPRA berhasil diambil');
     }
 
     public function getSoapSuggestions(Request $request)
