@@ -129,7 +129,7 @@ class SendPpraWaNotifications extends Command
                 }
             }
             
-            $beratBadan = $item->berat_badan > 0 ? number_format($item->berat_badan, 1) . ' kg' : '-';
+            $beratBadan = $item->berat_badan > 0 ? number_format((float)$item->berat_badan, 1) . ' kg' : '-';
 
             // Persiapan Pesan (More Compact & Professional)
             $messageText = "🏥 *NOTIFIKASI PPRA - RSIA AISYIYAH*\n" .
