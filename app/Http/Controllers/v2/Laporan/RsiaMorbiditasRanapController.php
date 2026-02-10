@@ -47,8 +47,8 @@ class RsiaMorbiditasRanapController extends Controller
         // Building CASE WHEN statements for each age group and gender
         $caseStatements = [];
         foreach ($ageGroups as $key => $group) {
-            $caseStatements[] = "SUM(CASE WHEN pas.jk = 'L' AND {$group['condition']} THEN 1 ELSE 0 END) as {$key}_l";
-            $caseStatements[] = "SUM(CASE WHEN pas.jk = 'P' AND {$group['condition']} THEN 1 ELSE 0 END) as {$key}_p";
+            $caseStatements[] = "SUM(CASE WHEN base.jk = 'L' AND base.{$group['condition']} THEN 1 ELSE 0 END) as {$key}_l";
+            $caseStatements[] = "SUM(CASE WHEN base.jk = 'P' AND base.{$group['condition']} THEN 1 ELSE 0 END) as {$key}_p";
         }
 
         // Subquery for raw data with calculated diffs
