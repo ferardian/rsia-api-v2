@@ -14,6 +14,7 @@ Route::prefix('laporan/statistik')->group(function () {
     Route::get('ranap/indicators/yearly', [\App\Http\Controllers\v2\Laporan\Inap\BedIndicatorController::class, 'getYearlyIndicators']);
     Route::get('ranap/morbiditas', [\App\Http\Controllers\v2\Laporan\RsiaMorbiditasRanapController::class, 'index']);
     Route::get('ralan/morbiditas', [\App\Http\Controllers\v2\Laporan\RsiaMorbiditasRalanController::class, 'index']);
+    Route::get('ralan/morbiditas/detail', [\App\Http\Controllers\v2\Laporan\RsiaMorbiditasRalanController::class, 'details']);
 });
 
 Route::get('laporan/rekap-presensi', [\App\Http\Controllers\v2\Laporan\RekapPresensiController::class, 'index']);
