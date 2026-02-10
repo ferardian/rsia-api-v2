@@ -14,6 +14,10 @@ class SendPpraWaNotifications extends Command
 
     public function handle()
     {
+        // 🛑 EMERGENCY STOP: Return early to prevent any notification sending
+        $this->info("PPRA Notification is currently DISABLED.");
+        return 0;
+
         $this->info("Checking for new PPRA prescriptions...");
 
         // 1. Ambil resep obat ralan/ranap yang mengandung obat dalam mapping PPRA
