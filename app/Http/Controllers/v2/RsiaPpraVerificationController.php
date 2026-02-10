@@ -193,7 +193,7 @@ class RsiaPpraVerificationController extends Controller
                 $join->on('ro.no_resep', '=', 'rd.no_resep')
                      ->on('dpo.kode_brng', '=', 'rd.kode_brng');
             })
-            ->leftJoin(DB::raw('(SELECT no_rawat, berat FROM pemeriksaan_ranap WHERE berat IS NOT NULL AND berat > 0 ORDER BY tgl_perawatan DESC, jam_rawat DESC LIMIT 1) as pr'), function($join) {
+            ->leftJoin(DB::raw('(SELECT no_rawat, berat FROM pemeriksaan_ranap WHERE berat IS NOT NULL AND berat > 0 ORDER BY tgl_perawatan DESC, jam_rawat DESC) as pr'), function($join) {
                 $join->on('ro.no_rawat', '=', 'pr.no_rawat');
             })
             ->where('ro.no_resep', $no_resep)
@@ -263,7 +263,7 @@ class RsiaPpraVerificationController extends Controller
             'nm_pasien' => $item->nm_pasien,
             'nama_obat' => $item->nama_brng,
             'message_text' => $messageText,
-            'type' => 'OUT_PPRA'
+            'type' => 'OUTGOING_PPRA'
         ]);
     }
 
