@@ -164,7 +164,9 @@ class RsiaPpraReportController extends Controller
             }
 
             // Parse dosage using regex
-            $aturan_pakai = $this->parseAturanPakai($original_aturan);
+            $parsed = $this->parseAturanPakai($original_aturan);
+            $aturan_pakai = $parsed['display'];
+            $magnitude = $parsed['magnitude'];
 
             if (!isset($data[$no_rawat]['antibiotik'][$ab_key])) {
                 $data[$no_rawat]['antibiotik'][$ab_key] = [
@@ -181,7 +183,8 @@ class RsiaPpraReportController extends Controller
                     'jml_total' => 0,
                     'ddd_factor' => (float) $item->nilai_ddd_who,
                     'satuan' => $item->kode_sat,
-                    'isi' => $item->isi
+                    'isi' => $item->isi,
+                    'magnitude' => $magnitude
                 ];
             }
             $data[$no_rawat]['antibiotik'][$ab_key]['jml_total'] += $item->jml;
@@ -193,11 +196,17 @@ class RsiaPpraReportController extends Controller
             $isFirstInRawat = true;
             foreach ($rn['antibiotik'] as $ab) {
                 // Calculate DDD
-                $total_converted = $ab['jml_total']; 
+                // Logic: prefer parsed magnitude (from Aturan Pakai) if available and > 0
+                // This ensures calculations follow verified dosage rules rather than just dispensed quantity.
+                $use_magnitude = $ab['magnitude'] > 0;
+                $total_converted = $use_magnitude ? $ab['magnitude'] : ($ab['jml_total'] * $ab['isi']);
+                
+                // Check if aturan_pakai is empty or just '-'
+                $hasValidDosage = !empty($ab['aturan_pakai']) && $ab['aturan_pakai'] !== '-';
                 
                 $ddd = 0;
-                if ($ab['ddd_factor'] > 0) {
-                    $ddd = ($total_converted * $ab['isi']) / $ab['ddd_factor'];
+                if ($hasValidDosage && $ab['ddd_factor'] > 0) {
+                    $ddd = $total_converted / $ab['ddd_factor'];
                 }
 
                 $row = [
@@ -219,8 +228,10 @@ class RsiaPpraReportController extends Controller
                     'catatan_telaah' => $ab['catatan_telaah'],
                     'catatan_persetujuan' => $ab['catatan_persetujuan'],
                     'total_pakai' => $ab['jml_total'] . ' ' . $ab['satuan'],
+                    'jml_total' => (float) $ab['jml_total'],
+                    'satuan' => $ab['satuan'],
                     'ddd_factor' => (float) $ab['ddd_factor'],
-                    'total_ddd' => round($ddd, 2),
+                    'total_ddd' => $hasValidDosage ? round($ddd, 2) : null,
                     'is_new_patient' => $isFirstInRawat
                 ];
 
@@ -308,9 +319,100 @@ class RsiaPpraReportController extends Controller
         return ApiResponse::successWithData(array_values($suggestions), 'Data saran SOAP berhasil diambil');
     }
 
+    public function rekapBulanan(Request $request)
+    {
+        $tahun = $request->query('tahun', date('Y'));
+        
+        $results = DB::table('detail_pemberian_obat')
+            ->join('resep_obat', function($join) {
+                $join->on('resep_obat.no_rawat', '=', 'detail_pemberian_obat.no_rawat')
+                    ->on('resep_obat.tgl_perawatan', '=', 'detail_pemberian_obat.tgl_perawatan')
+                    ->on('resep_obat.jam', '=', 'detail_pemberian_obat.jam');
+            })
+            ->join('databarang', 'detail_pemberian_obat.kode_brng', '=', 'databarang.kode_brng')
+            ->join('rsia_ppra_mapping_obat', 'databarang.kode_brng', '=', 'rsia_ppra_mapping_obat.kode_brng')
+            ->leftJoin('resep_dokter', function($join) {
+                $join->on('resep_obat.no_resep', '=', 'resep_dokter.no_resep')
+                    ->on('detail_pemberian_obat.kode_brng', '=', 'resep_dokter.kode_brng');
+            })
+            ->leftJoin('rsia_ppra_resep_verifikasi', function($join) {
+                $join->on('resep_obat.no_resep', '=', 'rsia_ppra_resep_verifikasi.no_resep')
+                    ->on('detail_pemberian_obat.kode_brng', '=', 'rsia_ppra_resep_verifikasi.kode_brng');
+            })
+            ->whereYear('resep_obat.tgl_perawatan', $tahun)
+            ->where('resep_obat.status', 'like', 'ranap%')
+            ->select([
+                'databarang.nama_brng',
+                'databarang.kode_brng',
+                'databarang.isi',
+                'rsia_ppra_mapping_obat.nilai_ddd_who',
+                'resep_dokter.aturan_pakai as aturan_pakai_dokter',
+                'rsia_ppra_resep_verifikasi.aturan_pakai as aturan_pakai_verif',
+                'detail_pemberian_obat.jml',
+                'resep_obat.tgl_perawatan',
+                'resep_obat.no_rawat'
+            ])
+            ->get();
+        
+        $data = [];
+        $daily_logs = []; // key: [kode_brng]_[no_rawat]_[tgl_perawatan]
+
+        foreach ($results as $item) {
+            $key = "{$item->kode_brng}_{$item->no_rawat}_{$item->tgl_perawatan}";
+            if (!isset($daily_logs[$key])) {
+                $original_aturan = $item->aturan_pakai_dokter ?: $item->aturan_pakai_verif;
+                $parsed = $this->parseAturanPakai($original_aturan);
+                
+                $daily_logs[$key] = [
+                    'kode_brng' => $item->kode_brng,
+                    'nama_brng' => $item->nama_brng,
+                    'bulan' => (int) date('n', strtotime($item->tgl_perawatan)),
+                    'aturan_pakai' => $original_aturan,
+                    'magnitude' => $parsed['magnitude'],
+                    'isi' => $item->isi,
+                    'ddd_factor' => (float) $item->nilai_ddd_who,
+                    'jml_total' => 0
+                ];
+            }
+            $daily_logs[$key]['jml_total'] += $item->jml;
+        }
+
+        foreach ($daily_logs as $log) {
+            if (!isset($data[$log['kode_brng']])) {
+                $data[$log['kode_brng']] = [
+                    'nama_brng' => $log['nama_brng'],
+                    'kode_brng' => $log['kode_brng'],
+                    'months' => array_combine(range(1, 12), array_fill(0, 12, 0))
+                ];
+            }
+
+            // Skip DDD calculation if no valid dosage rules
+            $hasValidDosage = isset($log['aturan_pakai']) && !empty($log['aturan_pakai']) && $log['aturan_pakai'] !== '-';
+            if (!$hasValidDosage) {
+                continue; // Skip this entry
+            }
+
+            $use_magnitude = $log['magnitude'] > 0;
+            $total_converted = $use_magnitude ? $log['magnitude'] : ($log['jml_total'] * $log['isi']);
+            
+            $ddd = $log['ddd_factor'] > 0 ? ($total_converted / $log['ddd_factor']) : 0;
+            $data[$log['kode_brng']]['months'][$log['bulan']] += $ddd;
+        }
+
+        // Final rounding
+        $finalData = array_values($data);
+        foreach ($finalData as &$medicine) {
+            foreach ($medicine['months'] as $m => $val) {
+                $medicine['months'][$m] = round($val, 2);
+            }
+        }
+
+        return ApiResponse::successWithData($finalData, 'Rekap bulanan PPRA berhasil diambil');
+    }
+
     private function parseAturanPakai($string)
     {
-        if (empty($string)) return '-';
+        if (empty($string)) return ['display' => '-', 'magnitude' => 0];
 
         // Normalize string for consistent parsing
         $cleanStr = trim($string);
@@ -345,13 +447,21 @@ class RsiaPpraReportController extends Controller
             return $this->formatTotalDose($freq, $dose, $unit);
         }
 
-        return $string;
+        return ['display' => $string, 'magnitude' => 0];
     }
 
     private function formatTotalDose($freq, $dose, $unit)
     {
         $total = $freq * $dose;
         $totalStr = $total . ' ' . $unit;
+        
+        $magnitude = 0;
+        $u = strtolower($unit);
+        if ($u == 'mg') {
+            $magnitude = $total / 1000; // Convert to grams
+        } elseif ($u == 'gr' || $u == 'gram') {
+            $magnitude = $total;
+        }
 
         if (strtolower($unit) == 'mg' && $total >= 1000) {
             $totalStr = ($total / 1000) . ' gr';
@@ -359,6 +469,9 @@ class RsiaPpraReportController extends Controller
             $totalStr = ($total * 1000) . ' mg';
         }
 
-        return "{$freq} x\n{$dose} {$unit} =\n{$totalStr}";
+        return [
+            'display' => "{$freq} x\n{$dose} {$unit} =\n{$totalStr}",
+            'magnitude' => (float) $magnitude
+        ];
     }
 }

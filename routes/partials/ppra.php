@@ -13,6 +13,7 @@ Route::prefix('ppra')->middleware(['auth:aes'])->group(function () {
     Route::apiResource('mapping-obat', \App\Http\Controllers\v2\RsiaPpraMappingObatController::class);
 
     Route::get('laporan', [\App\Http\Controllers\v2\RsiaPpraReportController::class, 'laporan']);
+    Route::get('rekap-bulanan', [\App\Http\Controllers\v2\RsiaPpraReportController::class, 'rekapBulanan']);
     Route::get('laporan/soap-suggestions', [\App\Http\Controllers\v2\RsiaPpraReportController::class, 'getSoapSuggestions']);
     Route::post('verifikasi', [\App\Http\Controllers\v2\RsiaPpraVerificationController::class, 'store']);
     Route::post('verifikasi/telaah', [\App\Http\Controllers\v2\RsiaPpraVerificationController::class, 'telaah']);
