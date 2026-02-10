@@ -16,9 +16,6 @@ class RsiaPpraVerificationController extends Controller
             'kode_brng' => 'required|string',
             'aturan_pakai' => 'nullable|string',
             'keterangan' => 'nullable|string',
-            'frekuensi' => 'nullable|string',
-            'dosis' => 'nullable|string',
-            'satuan' => 'nullable|string',
         ]);
 
         $data = [
@@ -26,9 +23,6 @@ class RsiaPpraVerificationController extends Controller
             'kode_brng' => $request->kode_brng,
             'aturan_pakai' => $request->aturan_pakai,
             'keterangan' => $request->keterangan,
-            'frekuensi' => $request->frekuensi,
-            'dosis' => $request->dosis,
-            'satuan' => $request->satuan,
             'nik_petugas' => auth()->user()->username ?? '-',
             'updated_at' => now(),
         ];
