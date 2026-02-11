@@ -97,9 +97,10 @@ class RsiaRemindObat extends Command
                 $body = "$greeting $nmPasien, saatnya minum obat Anda. Klik untuk detail.";
 
                 // 3. Build High Priority Message (Hybrid: Notification + Data)
-                // 3. Build High Priority Message (Hybrid: Notification + Data)
-                // Use 'rsiapi-v2' path as requested, and specify local icon names
-                $logoUrl = "https://sim.rsiaaisyiyah.com/rsiapi-v2/public/app_icon.png";
+                // 3. Build High Priority Message (Hybrid - FINAL STABLE)
+                // Kita gunakan Hybrid agar OS pasti menampilkan notifikasi (Title & Body).
+                // Parameter 'image' dihapus untuk menghindari gambar raksasa (Big Picture).
+                $logoUrl = "https://sim.rsiaaisyiyah.com/rsiapi-v2/public/app_icon_mobile.png";
                 $message = CloudMessage::withTarget('topic', $topic)
                     ->withNotification(\Kreait\Firebase\Messaging\Notification::fromArray([
                         'title' => $title,
@@ -112,14 +113,17 @@ class RsiaRemindObat extends Command
                         'route' => '/home',
                         'title' => $title,
                         'body' => $body,
-                        'image' => 'app_logo', // Look for local drawable app_logo
+                        'image' => $logoUrl,
                     ])
                     ->withAndroidConfig(AndroidConfig::fromArray([
                         'priority' => 'high',
+                        'ttl' => '3600s',
                         'notification' => [
-                            'icon' => 'ic_notification', // Local drawable for status bar
+                            'icon' => 'ic_notification',
                             'color' => '#005b96',
-                            'sound' => 'default',
+                            'channel_id' => 'high_importance_channel',
+                            // 'notification_priority' => 'HIGH', // Dihapus karena priority high di level atas sudah cukup
+                            // 'visibility' => 'PUBLIC',
                         ]
                     ]));
 
