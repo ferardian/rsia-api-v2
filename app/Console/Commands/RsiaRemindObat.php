@@ -97,15 +97,12 @@ class RsiaRemindObat extends Command
                 $body = "$greeting $nmPasien, saatnya minum obat Anda. Klik untuk detail.";
 
                 // 3. Build High Priority Message (Hybrid: Notification + Data)
-                // 3. Build High Priority Message (Hybrid - FINAL STABLE)
-                // Kita gunakan Hybrid agar OS pasti menampilkan notifikasi (Title & Body).
-                // Parameter 'image' dihapus untuk menghindari gambar raksasa (Big Picture).
+                // 3. Build High Priority Message (Strict Data-Only Strategy)
+                // Now that the user has granted "Unrestricted" battery permission,
+                // we use Data-Only to force the Flutter background handler to run.
+                // This allows the app to download the image and show the Large Icon (thumbnail).
                 $logoUrl = "https://sim.rsiaaisyiyah.com/rsiapi-v2/public/app_icon_mobile.png";
                 $message = CloudMessage::withTarget('topic', $topic)
-                    ->withNotification(\Kreait\Firebase\Messaging\Notification::fromArray([
-                        'title' => $title,
-                        'body' => $body,
-                    ]))
                     ->withData([
                         'type' => 'MEDICINE_REMINDER_DIRECT',
                         'topic' => $topic,
@@ -118,13 +115,6 @@ class RsiaRemindObat extends Command
                     ->withAndroidConfig(AndroidConfig::fromArray([
                         'priority' => 'high',
                         'ttl' => '3600s',
-                        'notification' => [
-                            'icon' => 'ic_notification',
-                            'color' => '#005b96',
-                            'channel_id' => 'high_importance_channel',
-                            // 'notification_priority' => 'HIGH', // Dihapus karena priority high di level atas sudah cukup
-                            // 'visibility' => 'PUBLIC',
-                        ]
                     ]));
 
                 // 4. Send via Firebase

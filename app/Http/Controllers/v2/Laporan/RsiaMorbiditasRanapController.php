@@ -14,6 +14,7 @@ class RsiaMorbiditasRanapController extends Controller
     {
         $month = $request->query('month', date('m'));
         $year = $request->query('year', date('Y'));
+        $kd_sps = $request->query('kd_sps');
 
         // Define age groups for SIRS/RL reporting
         $ageGroups = [
@@ -55,9 +56,13 @@ class RsiaMorbiditasRanapController extends Controller
         $rawQuery = DB::table('diagnosa_pasien as dp')
             ->join('reg_periksa as reg', 'dp.no_rawat', '=', 'reg.no_rawat')
             ->join('pasien as pas', 'reg.no_rkm_medis', '=', 'pas.no_rkm_medis')
+            ->join('dokter as dr', 'reg.kd_dokter', '=', 'dr.kd_dokter')
             ->leftJoin('pasien_mati as pm', function($join) {
                 $join->on('pas.no_rkm_medis', '=', 'pm.no_rkm_medis')
                      ->whereColumn('pm.tanggal', '>=', 'reg.tgl_registrasi');
+            })
+            ->when($kd_sps, function($q) use ($kd_sps) {
+                return $q->where('dr.kd_sps', $kd_sps);
             })
             ->select(
                 'dp.kd_penyakit',
@@ -70,7 +75,9 @@ class RsiaMorbiditasRanapController extends Controller
             )
             ->where('dp.status', 'Ranap')
             ->where('dp.prioritas', 1)
-            ->whereMonth('reg.tgl_registrasi', $month)
+            ->when($month && $month !== 'annual', function($q) use ($month) {
+                return $q->whereMonth('reg.tgl_registrasi', $month);
+            })
             ->whereYear('reg.tgl_registrasi', $year);
 
         // Main grouping query

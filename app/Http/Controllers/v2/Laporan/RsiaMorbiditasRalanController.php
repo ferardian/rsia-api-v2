@@ -13,6 +13,7 @@ class RsiaMorbiditasRalanController extends Controller
     {
         $month = $request->query('month', date('m'));
         $year = $request->query('year', date('Y'));
+        $kd_sps = $request->query('kd_sps');
 
         // Define age groups mapping for Ralan
         // Note: Using sttsumur (Th, Bl, Hr) and umurdaftar
@@ -55,6 +56,10 @@ class RsiaMorbiditasRalanController extends Controller
         $rawQuery = DB::table('diagnosa_pasien as dp')
             ->join('reg_periksa as reg', 'dp.no_rawat', '=', 'reg.no_rawat')
             ->join('pasien as pas', 'reg.no_rkm_medis', '=', 'pas.no_rkm_medis')
+            ->join('dokter as dr', 'reg.kd_dokter', '=', 'dr.kd_dokter')
+            ->when($kd_sps, function($q) use ($kd_sps) {
+                return $q->where('dr.kd_sps', $kd_sps);
+            })
             ->select(
                 'dp.kd_penyakit',
                 'pas.jk',
@@ -71,7 +76,9 @@ class RsiaMorbiditasRalanController extends Controller
             )
             ->where('dp.status', 'Ralan')
             ->where('dp.prioritas', 1)
-            ->whereMonth('reg.tgl_registrasi', $month)
+            ->when($month && $month !== 'annual', function($q) use ($month) {
+                return $q->whereMonth('reg.tgl_registrasi', $month);
+            })
             ->whereYear('reg.tgl_registrasi', $year);
 
         // Main grouping query
