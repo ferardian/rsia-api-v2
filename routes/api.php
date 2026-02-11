@@ -71,6 +71,12 @@ Route::prefix('otp')->middleware(['detail-user', 'claim:role,pegawai|dokter|pasi
 });
 // ======== END OTP ========
 
+// Wilayah (Address) Data
+Route::get('/wilayah/propinsi', [\App\Http\Controllers\v2\WilayahController::class, 'getPropinsi']);
+Route::get('/wilayah/kabupaten', [\App\Http\Controllers\v2\WilayahController::class, 'getKabupaten']);
+Route::get('/wilayah/kecamatan', [\App\Http\Controllers\v2\WilayahController::class, 'getKecamatan']);
+Route::get('/wilayah/kelurahan', [\App\Http\Controllers\v2\WilayahController::class, 'getKelurahan']);
+
 // Logistik Master Data routes moved to routes/partials/logistik.php
 
 
