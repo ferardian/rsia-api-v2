@@ -63,7 +63,7 @@ class PasienRegistrationController extends Controller
         
         // Rate Limiting: Max 3 OTPs per IP per hour
         $key = 'send_otp:' . $ip . ':' . $phone;
-        echo "   🔍 Rate Key: $key\n"; // DEBUG
+        // echo "   🔍 Rate Key: $key\n"; // DEBUG
         if (RateLimiter::tooManyAttempts($key, 3)) {
             $seconds = RateLimiter::availableIn($key);
             return ApiResponse::error(
