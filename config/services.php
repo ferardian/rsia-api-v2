@@ -30,6 +30,12 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    'whatsapp' => [
+        'url' => env('WAHA_BASE_URL', env('API_WHATSAPP_URL')),
+        'key' => env('WHATSAPP_API_KEY'),
+        'session' => env('WAHA_SESSION_NAME', 'byu-ferry'),
+    ],
+
     'bpjs' => [
         'cons_id'     => env('BPJS_CONS_ID'),
         'cons_secret' => env('BPJS_CONS_SECRET'),

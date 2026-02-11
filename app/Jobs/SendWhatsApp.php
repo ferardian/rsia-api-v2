@@ -46,29 +46,41 @@ class SendWhatsApp implements ShouldQueue
      */
     public function handle()
     {
-        /**
-         * Simulate a delay of 10-60 seconds
-         * to simulate the process of sending OTP via WhatsApp
-         */
-        // $random = random_int(10, 60);
-        // sleep($random);
+        // Get WhatsApp API configuration from config (mapped from .env)
+        $apiUrl = config('services.whatsapp.url');
+        $apiKey = config('services.whatsapp.key');
+        $sessionName = config('services.whatsapp.session');
+        
+        // Format phone number (remove leading 0, add 62 for Indonesia)
+        $phone = $this->noHp;
+        if (substr($phone, 0, 1) === '0') {
+            $phone = '62' . substr($phone, 1);
+        }
 
-        // Send OTP via WhatsApp
-        $apiWhatsappUrl = env('API_WHATSAPP_URL');
+        try {
+            // WAHA API format - using /api/sendText endpoint
+            $response = Http::withHeaders([
+                'X-Api-Key' => $apiKey,
+                'Content-Type' => 'application/json'
+            ])->post("$apiUrl/api/sendText", [
+                'session' => $sessionName,
+                'chatId' => $phone . '@c.us',
+                'text' => $this->message
+            ]);
 
-        $realNoHp = $this->noHp . "@s.whatsapp.net";
-
-        $response = Http::withHeaders([
-            'Authorization' => 'Basic ' . base64_encode(env('API_WHATSAPP_USERNAME') . ':' . env('API_WHATSAPP_PASSWORD'))
-        ])->post("$apiWhatsappUrl/send/message", [
-            'phone'   => $realNoHp,
-            'message' => $this->message
-        ]);
-
-        if ($response->successful()) {
-            \App\Helpers\Logger\RSIALogger::notifications("OTP sent to $this->noHp");
-        } else {
-            \App\Helpers\Logger\RSIALogger::notifications("Failed to send OTP to $this->noHp", 'error');
+            if ($response->successful()) {
+                \App\Helpers\Logger\RSIALogger::notifications("OTP sent to $this->noHp via WAHA/Sumopod");
+            } else {
+                \App\Helpers\Logger\RSIALogger::notifications(
+                    "Failed to send OTP to $this->noHp. Status: " . $response->status() . " Response: " . $response->body(), 
+                    'error'
+                );
+            }
+        } catch (\Exception $e) {
+            \App\Helpers\Logger\RSIALogger::notifications(
+                "Exception sending OTP to $this->noHp: " . $e->getMessage(), 
+                'error'
+            );
         }
     }
 }
