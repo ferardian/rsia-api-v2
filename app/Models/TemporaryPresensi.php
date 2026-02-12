@@ -10,4 +10,19 @@ class TemporaryPresensi extends Model
     use HasFactory;
 
     protected $table = 'temporary_presensi';
+    public $timestamps = false;
+
+    protected $fillable = [
+        'id', 'shift', 'jam_datang', 'status', 
+        'keterlambatan', 'keterangan', 'photo'
+    ];
+
+    protected $casts = [
+        'jam_datang' => 'datetime',
+    ];
+
+    public function pegawai()
+    {
+        return $this->belongsTo(Pegawai::class, 'id', 'id');
+    }
 }

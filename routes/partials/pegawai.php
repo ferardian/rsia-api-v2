@@ -45,4 +45,10 @@ Route::middleware(['auth:aes', 'claim:role,pegawai|dokter'])->group(function () 
   // ==================== PRESENSI PEGAWAI
   Orion::belongsToManyResource('pegawai', 'presensi', \App\Http\Controllers\Orion\PresensiKaryawanController::class)->only(['index', 'search']);
   Route::resource('pegawai/{pegawai}/presensi/temporary', \App\Http\Controllers\v2\RsiaTemporaryPresensiController::class)->only(['index']);
+
+  // ==================== PRESENSI ONLINE (Face & Geo)
+  Route::post('presensi-online/check-in', [\App\Http\Controllers\v2\PresensiOnlineController::class, 'checkIn']);
+  Route::post('presensi-online/check-out', [\App\Http\Controllers\v2\PresensiOnlineController::class, 'checkOut']);
+  Route::get('presensi-online/status', [\App\Http\Controllers\v2\PresensiOnlineController::class, 'getStatus']);
+  Route::get('presensi-online/config', [\App\Http\Controllers\v2\PresensiOnlineController::class, 'getConfig']);
 });
