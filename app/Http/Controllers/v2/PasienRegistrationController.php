@@ -171,6 +171,9 @@ class PasienRegistrationController extends Controller
             'keluarga'     => 'required|in:AYAH,IBU,SUAMI,ISTRI,SAUDARA,ANAK',
             'pekerjaanpj'  => 'nullable|string|max:35',
             'alamatpj'     => 'nullable|string|max:100',
+
+            // File Upload
+            'ktp_image'    => 'required|image|mimes:jpg,jpeg,png|max:2048', // Max 2MB
         ]);
 
         if ($validator->fails()) {
@@ -194,6 +197,26 @@ class PasienRegistrationController extends Controller
         // Final guard: Check NIK in main table
         if (DB::table('pasien')->where('no_ktp', $request->nik)->exists()) {
             return ApiResponse::error("NIK sudah terdaftar.", "nik_already_registered", null, 422);
+        }
+
+        // Handle KTP Image Upload via SFTP
+        $ktpPath = null;
+        if ($request->hasFile('ktp_image')) {
+            try {
+                $file = $request->file('ktp_image');
+                $filename = 'ktp_' . $request->nik . '.' . $file->getClientOriginalExtension();
+                $saveDir = env('FOTO_KTP_SAVE_LOCATION', 'pasien_ktp/');
+                
+                // Store on SFTP
+                $ktpPath = $saveDir . $filename;
+                
+                // Ensure disk is sftp
+                if (!Storage::disk('sftp')->put($ktpPath, file_get_contents($file))) {
+                    throw new \Exception("Gagal mengunggah foto KTP ke server file.");
+                }
+            } catch (\Exception $e) {
+                return ApiResponse::error("Gagal memproses foto KTP: " . $e->getMessage(), "ktp_upload_failed", null, 500);
+            }
         }
 
         try {
@@ -266,7 +289,18 @@ class PasienRegistrationController extends Controller
                 'propinsipj'   => $prop ? strtoupper($prop->nm_prop) : '-',
             ]);
 
-            // 5. Update the RM counter (Set equal to the new RM used)
+            // 5. Insert/Update into personal_pasien (Safe for SIMRS Khanza)
+            // This table is used for mobile/e-pasien features.
+            DB::table('personal_pasien')->updateOrInsert(
+                ['no_rkm_medis' => $noRkmMedis],
+                [
+                    'foto_ktp' => $ktpPath,
+                    // 'gambar'  => $ktpPath, // Optional: also set as profile photo? Decided no, keep separately.
+                    // 'password' stays same if exists, or null here (usually set during first app login)
+                ]
+            );
+
+            // 6. Update the RM counter (Set equal to the new RM used)
             DB::table('set_no_rkm_medis')->update(['no_rkm_medis' => $noRkmMedis]);
 
             DB::commit();
