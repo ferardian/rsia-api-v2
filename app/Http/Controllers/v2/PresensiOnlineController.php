@@ -278,7 +278,13 @@ class PresensiOnlineController extends Controller
 
         $pegawai = Pegawai::where('nik', $nik)->first();
         if (!$pegawai) {
-            return response()->json(['success' => false, 'message' => 'Pegawai tidak ditemukan'], 404);
+            // Try cleaning NIK (remove dots) if not found
+            $cleanNik = str_replace('.', '', $nik);
+            $pegawai = Pegawai::where('nik', $cleanNik)->first();
+            
+            if (!$pegawai) {
+                return response()->json(['success' => false, 'message' => 'Pegawai tidak ditemukan'], 404);
+            }
         }
 
         // Check if face is registered
@@ -286,16 +292,15 @@ class PresensiOnlineController extends Controller
             ->where('is_active', 1)
             ->first();
 
-        $today = Carbon::today();
-        
+        // Use Database Date to ensure consistency with stored data
         // Check temporary_presensi (check-in only)
         $tempPresensi = TemporaryPresensi::where('id', $pegawai->id)
-            ->whereDate('jam_datang', $today)
+            ->whereRaw('DATE(jam_datang) = CURDATE()')
             ->first();
             
         // Check rekap_presensi (complete record)
         $rekapPresensi = RekapPresensi::where('id', $pegawai->id)
-            ->whereDate('jam_datang', $today)
+            ->whereRaw('DATE(jam_datang) = CURDATE()')
             ->first();
 
         $status = 'none'; // none, checked_in, checked_out
