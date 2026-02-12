@@ -19,7 +19,7 @@ class WilayahController extends Controller
             $query->where('nm_prop', 'like', '%' . $request->q . '%');
         }
 
-        return ApiResponse::success($query->orderBy('nm_prop', 'asc')->limit(100)->get());
+        return ApiResponse::success($query->orderBy('nm_prop', 'asc')->get());
     }
 
     public function getKabupaten(Request $request)
@@ -32,7 +32,7 @@ class WilayahController extends Controller
             $query->where('nm_kab', 'like', '%' . $request->q . '%');
         }
 
-        return ApiResponse::success($query->orderBy('nm_kab', 'asc')->limit(100)->get());
+        return ApiResponse::success($query->orderBy('nm_kab', 'asc')->get());
     }
 
     public function getKecamatan(Request $request)
@@ -45,7 +45,7 @@ class WilayahController extends Controller
             $query->where('nm_kec', 'like', '%' . $request->q . '%');
         }
 
-        return ApiResponse::success($query->orderBy('nm_kec', 'asc')->limit(100)->get());
+        return ApiResponse::success($query->orderBy('nm_kec', 'asc')->get());
     }
 
     public function getKelurahan(Request $request)
@@ -58,6 +58,6 @@ class WilayahController extends Controller
             $query->where('nm_kel', 'like', '%' . $request->q . '%');
         }
 
-        return ApiResponse::success($query->orderBy('nm_kel', 'asc')->limit(100)->get());
+        return ApiResponse::success($query->orderBy('nm_kel', 'asc')->get());
     }
 }
