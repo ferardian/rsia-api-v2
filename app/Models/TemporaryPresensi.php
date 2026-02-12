@@ -10,6 +10,8 @@ class TemporaryPresensi extends Model
     use HasFactory;
 
     protected $table = 'temporary_presensi';
+    protected $primaryKey = 'id';
+    public $incrementing = false;
     public $timestamps = false;
 
     protected $fillable = [
