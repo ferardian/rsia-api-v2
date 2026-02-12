@@ -140,6 +140,12 @@ class PasienRegistrationController extends Controller
      */
     public function register(Request $request)
     {
+        Log::info("🚀 [Register] Incoming request from IP: " . $request->ip(), [
+            'nik' => $request->nik,
+            'nm_pasien' => $request->nm_pasien,
+            'has_file' => $request->hasFile('ktp_image'),
+        ]);
+
         // 0. Security Check: Rate Limiting & Token Validity
         $ip = $request->ip();
         $rateKey = 'register_pasien:' . $ip;
@@ -200,6 +206,7 @@ class PasienRegistrationController extends Controller
         }
 
         // Handle KTP Image Upload via SFTP
+        Log::info("🚀 [Register] Starting SFTP upload to: " . env('SFTP_HOST'));
         $ktpPath = null;
         if ($request->hasFile('ktp_image')) {
             try {
@@ -220,6 +227,7 @@ class PasienRegistrationController extends Controller
         }
 
         try {
+            Log::info("🚀 [Register] Starting Database Transaction");
             DB::beginTransaction();
 
             // 1. Generate No. RM (Medical Record Number)
@@ -307,6 +315,7 @@ class PasienRegistrationController extends Controller
 
             // Success Notification via WhatsApp
             try {
+                Log::info("🚀 [Register] Dispatching WhatsApp Job (Queue: " . env('QUEUE_CONNECTION') . ")");
                 $phone = $this->formatPhoneNumber($request->no_telp);
                 $successMessage = "Pendaftaran Pasien Baru Berhasil!\n\nNama: " . strtoupper($request->nm_pasien) . "\nNo. RM: *$noRkmMedis*\n\nHarap simpan No. RM ini untuk keperluan berobat. Terima kasih.";
                 

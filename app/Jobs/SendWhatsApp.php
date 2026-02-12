@@ -59,7 +59,7 @@ class SendWhatsApp implements ShouldQueue
 
         try {
             // WAHA API format - using /api/sendText endpoint
-            $response = Http::withHeaders([
+            $response = Http::timeout(10)->withHeaders([
                 'X-Api-Key' => $apiKey,
                 'Content-Type' => 'application/json'
             ])->post("$apiUrl/api/sendText", [
