@@ -45,9 +45,6 @@ class PasienRegistrationController extends Controller
     /**
      * Step 2: Send OTP via WhatsApp.
      */
-    /**
-     * Step 2: Send OTP via WhatsApp.
-     */
     public function sendOtp(Request $request)
     {
         $validator = Validator::make($request->all(), [
@@ -63,7 +60,6 @@ class PasienRegistrationController extends Controller
         
         // Rate Limiting: Max 3 OTPs per IP per hour
         $key = 'send_otp:' . $ip . ':' . $phone;
-        // echo "   🔍 Rate Key: $key\n"; // DEBUG
         if (RateLimiter::tooManyAttempts($key, 3)) {
             $seconds = RateLimiter::availableIn($key);
             return ApiResponse::error(
@@ -88,9 +84,6 @@ class PasienRegistrationController extends Controller
                 \App\Jobs\SendWhatsApp::dispatch($phone, $message)
                     ->onQueue('otp');
             }
-
-            // DEBUG
-            // echo "ENV: " . app()->environment() . " | DEBUG: " . config('app.debug') . "\n";
 
             return ApiResponse::success('OTP sent successfully', [
                 'otp' => (config('app.debug') || app()->environment('local', 'testing')) ? $otpCode : null 
@@ -122,8 +115,6 @@ class PasienRegistrationController extends Controller
         }
 
         // OTP Valid: Generate Verification Token
-        // This token verifies that THIS phone number has been verified.
-        // Token valid for 15 minutes.
         $regToken = Str::random(60);
         Cache::put('reg_token_' . $regToken, $phone, 900); // 15 mins
         
@@ -140,14 +131,7 @@ class PasienRegistrationController extends Controller
      */
     public function register(Request $request)
     {
-        Log::info("🚀 [Register] Incoming request from IP: " . $request->ip(), [
-            'nik' => $request->nik,
-            'nm_pasien' => $request->nm_pasien,
-            'has_file' => $request->hasFile('ktp_image'),
-        ]);
-
         // 0. Security Check: Rate Limiting & Token Validity
-        Log::info("🚀 [Register] Step: Security Check");
         $ip = $request->ip();
         $rateKey = 'register_pasien:' . $ip;
         
@@ -183,38 +167,26 @@ class PasienRegistrationController extends Controller
             'ktp_image'    => 'required|image|mimes:jpg,jpeg,png|max:5120', // Max 5MB (Increased from 2MB)
         ]);
 
-        Log::info("🚀 [Register] Step: Validating Fields");
         if ($validator->fails()) {
-            Log::warning("🚀 [Register] Validation FAILED", ['errors' => $validator->errors()]);
             return ApiResponse::validationError($validator->errors());
         }
-        Log::info("🚀 [Register] Validation PASSED");
 
         // Verify Token
-        Log::info("🚀 [Register] Step: Verifying Token with Cache");
         $verifiedPhone = Cache::get('reg_token_' . $request->reg_token);
-        Log::info("🚀 [Register] Cache result: " . ($verifiedPhone ? "Found (Token OK)" : "Not Found (Token EXPIRED/INVALID)"));
         
         if (!$verifiedPhone) {
             return ApiResponse::error("Sesi pendaftaran tidak valid atau kadaluarsa. Silakan ulangi verifikasi OTP.", "invalid_token", null, 401);
         }
 
-        // Optional: Ensure phone number matches (if we want to be strict)
-        // $requestPhone = $this->formatPhoneNumber($request->no_telp);
-        // if ($verifiedPhone != $requestPhone) { ... }
-        // For now, we trust the token implies a verified user is acting.
-
         // Increment Rate Limit
         RateLimiter::hit($rateKey, 3600);
 
         // Final guard: Check NIK in main table
-        Log::info("🚀 [Register] Step: Checking NIK in Database (exists?)");
         if (DB::table('pasien')->where('no_ktp', $request->nik)->exists()) {
             return ApiResponse::error("NIK sudah terdaftar.", "nik_already_registered", null, 422);
         }
 
         // Handle KTP Image Upload via SFTP
-        Log::info("🚀 [Register] Starting SFTP upload to: " . env('SFTP_HOST'));
         $ktpPath = null;
         if ($request->hasFile('ktp_image')) {
             try {
@@ -235,16 +207,13 @@ class PasienRegistrationController extends Controller
         }
 
         try {
-            Log::info("🚀 [Register] Starting Database Transaction");
             DB::beginTransaction();
 
             // 1. Generate No. RM (Medical Record Number)
-            // Logic: Ambil last RM dari set_no_rkm_medis, lalu +1
             $setNoRm = DB::table('set_no_rkm_medis')->lockForUpdate()->first();
             if (!$setNoRm) {
                 throw new \Exception("Configurasi Medical Record (set_no_rkm_medis) tidak ditemukan.");
             }
-            // Increment BEFORE using
             $noRkmMedis = str_pad((int)$setNoRm->no_rkm_medis + 1, 6, '0', STR_PAD_LEFT);
 
             // 2. Calculate Umur (e.g., "30 Th 5 Bl 10 Hr")
@@ -253,8 +222,7 @@ class PasienRegistrationController extends Controller
             $interval = $now->diff($birthDate);
             $umur = "{$interval->y} Th {$interval->m} Bl {$interval->d} Hr";
 
-            // 3. Fetch Area Names (Kelurahan, Kecamatan, Kabupaten, Propinsi) for PJ fields
-            // Defaults to '-' (ID: 1 based on check) if not provided
+            // 3. Fetch Area Names
             $kdKel = $request->kd_kel ?? 1; // Default to '-'
             $kdKec = $request->kd_kec ?? 1; // Default to '-'
             $kdKab = $request->kd_kab ?? 1; // Default to '-'
@@ -296,34 +264,30 @@ class PasienRegistrationController extends Controller
                 'kecamatanpj'  => $kec ? strtoupper($kec->nm_kec) : '-',
                 'kabupatenpj'  => $kab ? strtoupper($kab->nm_kab) : '-',
                 'perusahaan_pasien' => '-',
-                'suku_bangsa'  => 5, // Typical default value from analysis
-                'bahasa_pasien' => 5, // Typical default value from analysis
-                'cacat_fisik'  => 5, // Typical default value from analysis
+                'suku_bangsa'  => 5,
+                'bahasa_pasien' => 5,
+                'cacat_fisik'  => 5,
                 'email'        => $request->email ?? '',
                 'nip'          => '',
                 'kd_prop'      => $kdProp,
                 'propinsipj'   => $prop ? strtoupper($prop->nm_prop) : '-',
             ]);
 
-            // 5. Insert/Update into personal_pasien (Safe for SIMRS Khanza)
-            // This table is used for mobile/e-pasien features.
+            // 5. Insert/Update into personal_pasien
             DB::table('personal_pasien')->updateOrInsert(
                 ['no_rkm_medis' => $noRkmMedis],
                 [
                     'foto_ktp' => $ktpPath,
-                    // 'gambar'  => $ktpPath, // Optional: also set as profile photo? Decided no, keep separately.
-                    // 'password' stays same if exists, or null here (usually set during first app login)
                 ]
             );
 
-            // 6. Update the RM counter (Set equal to the new RM used)
+            // 6. Update the RM counter
             DB::table('set_no_rkm_medis')->update(['no_rkm_medis' => $noRkmMedis]);
 
             DB::commit();
 
             // Success Notification via WhatsApp
             try {
-                Log::info("🚀 [Register] Dispatching WhatsApp Job (Queue: " . env('QUEUE_CONNECTION') . ")");
                 $phone = $this->formatPhoneNumber($request->no_telp);
                 $successMessage = "Pendaftaran Pasien Baru Berhasil!\n\nNama: " . strtoupper($request->nm_pasien) . "\nNo. RM: *$noRkmMedis*\n\nHarap simpan No. RM ini untuk keperluan berobat. Terima kasih.";
                 
