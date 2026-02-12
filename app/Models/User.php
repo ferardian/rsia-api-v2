@@ -113,4 +113,17 @@ class User extends Authenticatable
     {
         return $this->hasOne(Pegawai::class, 'nik', 'id_user');
     }
+
+    /**
+     * Get decrypted id_user as NIK
+     */
+    public function getNikAttribute()
+    {
+        $result = DB::selectOne("SELECT AES_DECRYPT(id_user, ?) as nik FROM user WHERE id_user = ?", [
+            env('MYSQL_AES_KEY_IDUSER'),
+            $this->attributes['id_user']
+        ]);
+        
+        return $result ? $result->nik : null;
+    }
 }
