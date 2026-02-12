@@ -272,7 +272,10 @@ class PresensiOnlineController extends Controller
     public function getStatus(Request $request)
     {
         $nik = $request->nik ?? $request->user()->nik;
+        \Illuminate\Support\Facades\Log::info("GetStatus Presensi: NIK Received = " . json_encode($nik));
+
         if (!$nik) {
+            \Illuminate\Support\Facades\Log::error("GetStatus: NIK Missing");
             return response()->json(['success' => false, 'message' => 'NIK required'], 400);
         }
 
