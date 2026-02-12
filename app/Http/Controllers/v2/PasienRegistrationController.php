@@ -305,11 +305,20 @@ class PasienRegistrationController extends Controller
 
             DB::commit();
 
+            // Success Notification via WhatsApp
+            try {
+                $phone = $this->formatPhoneNumber($request->no_telp);
+                $successMessage = "Pendaftaran Pasien Baru Berhasil!\n\nNama: " . strtoupper($request->nm_pasien) . "\nNo. RM: *$noRkmMedis*\n\nHarap simpan No. RM ini untuk keperluan berobat. Terima kasih.";
+                
+                \App\Jobs\SendWhatsApp::dispatch($phone, $successMessage)->onQueue('otp');
+            } catch (\Exception $e) {
+                Log::error("Failed to send success WhatsApp: " . $e->getMessage());
+            }
+
             // Invalidate Token
             Cache::forget('reg_token_' . $request->reg_token);
 
-            return ApiResponse::success([
-                'message'      => 'Pendaftaran pasien baru berhasil.',
+            return ApiResponse::success('Pendaftaran pasien baru berhasil.', [
                 'no_rkm_medis' => $noRkmMedis,
                 'nm_pasien'    => strtoupper($request->nm_pasien),
             ]);
