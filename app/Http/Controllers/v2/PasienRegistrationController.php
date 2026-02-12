@@ -185,12 +185,16 @@ class PasienRegistrationController extends Controller
 
         Log::info("🚀 [Register] Step: Validating Fields");
         if ($validator->fails()) {
+            Log::warning("🚀 [Register] Validation FAILED", ['errors' => $validator->errors()]);
             return ApiResponse::validationError($validator->errors());
         }
+        Log::info("🚀 [Register] Validation PASSED");
 
         // Verify Token
         Log::info("🚀 [Register] Step: Verifying Token with Cache");
         $verifiedPhone = Cache::get('reg_token_' . $request->reg_token);
+        Log::info("🚀 [Register] Cache result: " . ($verifiedPhone ? "Found (Token OK)" : "Not Found (Token EXPIRED/INVALID)"));
+        
         if (!$verifiedPhone) {
             return ApiResponse::error("Sesi pendaftaran tidak valid atau kadaluarsa. Silakan ulangi verifikasi OTP.", "invalid_token", null, 401);
         }
