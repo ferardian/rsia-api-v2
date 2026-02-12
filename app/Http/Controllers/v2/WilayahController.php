@@ -11,52 +11,53 @@ class WilayahController extends Controller
 {
     public function getPropinsi(Request $request)
     {
-        $data = DB::table('propinsi')->select('kd_prop', 'nm_prop')->get();
-        return ApiResponse::success($data);
+        $query = DB::table('propinsi')->select('kd_prop', 'nm_prop')
+            ->whereRaw('LENGTH(nm_prop) >= 3')
+            ->whereRaw('nm_prop REGEXP "^[a-zA-Z]"');
+
+        if ($request->has('q')) {
+            $query->where('nm_prop', 'like', '%' . $request->q . '%');
+        }
+
+        return ApiResponse::success($query->orderBy('nm_prop', 'asc')->limit(100)->get());
     }
 
     public function getKabupaten(Request $request)
     {
-        $query = DB::table('kabupaten')->select('kd_kab', 'nm_kab');
+        $query = DB::table('kabupaten')->select('kd_kab', 'nm_kab')
+            ->whereRaw('LENGTH(nm_kab) >= 3')
+            ->whereRaw('nm_kab REGEXP "^[a-zA-Z]"');
         
-        if ($request->has('kd_prop')) {
-            // Check if schema supports linking kabupaten to propinsi properly
-            // Usually valid schema: kd_prop is in kabupaten, or it relies on prefix?
-            // Let's assume standard relation first, but we might need to verify schema. 
-            // Based on typical SIMRS Khanza structure:
-            // kabupaten has kd_prop? No, usually it's independent or linked via mapping.
-            // Let's check table schema first in next step if this is guess work.
-            // ACTUALLY, usually in SIMRS Khanza:
-            // propinsi: kd_prop, nm_prop
-            // kabupaten: kd_kab, nm_kab
-            // They are often NOT strict relational in some versions, but let's assume they are NOT linked 
-            // unless we see a column. 
-            // WAIT - I should check schema first. 
-            // But for now I'll implement basic fetch all or search.
-        }
-
         if ($request->has('q')) {
             $query->where('nm_kab', 'like', '%' . $request->q . '%');
         }
 
-        return ApiResponse::success($query->limit(50)->get());
+        return ApiResponse::success($query->orderBy('nm_kab', 'asc')->limit(100)->get());
     }
 
     public function getKecamatan(Request $request)
     {
-        $query = DB::table('kecamatan')->select('kd_kec', 'nm_kec');
+        $query = DB::table('kecamatan')->select('kd_kec', 'nm_kec')
+            ->whereRaw('LENGTH(nm_kec) >= 3')
+            ->whereRaw('nm_kec REGEXP "^[a-zA-Z]"');
+
         if ($request->has('q')) {
             $query->where('nm_kec', 'like', '%' . $request->q . '%');
         }
-        return ApiResponse::success($query->limit(50)->get());
+
+        return ApiResponse::success($query->orderBy('nm_kec', 'asc')->limit(100)->get());
     }
 
     public function getKelurahan(Request $request)
     {
-        $query = DB::table('kelurahan')->select('kd_kel', 'nm_kel');
+        $query = DB::table('kelurahan')->select('kd_kel', 'nm_kel')
+            ->whereRaw('LENGTH(nm_kel) >= 3')
+            ->whereRaw('nm_kel REGEXP "^[a-zA-Z]"');
+
         if ($request->has('q')) {
             $query->where('nm_kel', 'like', '%' . $request->q . '%');
         }
-        return ApiResponse::success($query->limit(50)->get());
+
+        return ApiResponse::success($query->orderBy('nm_kel', 'asc')->limit(100)->get());
     }
 }
