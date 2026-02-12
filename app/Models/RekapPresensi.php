@@ -47,6 +47,11 @@ class RekapPresensi extends Model
 
     protected $guarded = [];
 
+    protected $casts = [
+        'jam_datang' => 'datetime',
+        'jam_pulang' => 'datetime',
+    ];
+
 
     /**
      * Get the pegawai that owns the RekapPresensi
