@@ -180,7 +180,7 @@ class PasienRegistrationController extends Controller
             'alamatpj'     => 'nullable|string|max:100',
 
             // File Upload
-            'ktp_image'    => 'required|image|mimes:jpg,jpeg,png|max:2048', // Max 2MB
+            'ktp_image'    => 'required|image|mimes:jpg,jpeg,png|max:5120', // Max 5MB (Increased from 2MB)
         ]);
 
         Log::info("🚀 [Register] Step: Validating Fields");
