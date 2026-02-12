@@ -147,6 +147,7 @@ class PasienRegistrationController extends Controller
         ]);
 
         // 0. Security Check: Rate Limiting & Token Validity
+        Log::info("🚀 [Register] Step: Security Check");
         $ip = $request->ip();
         $rateKey = 'register_pasien:' . $ip;
         
@@ -182,11 +183,13 @@ class PasienRegistrationController extends Controller
             'ktp_image'    => 'required|image|mimes:jpg,jpeg,png|max:2048', // Max 2MB
         ]);
 
+        Log::info("🚀 [Register] Step: Validating Fields");
         if ($validator->fails()) {
             return ApiResponse::validationError($validator->errors());
         }
 
         // Verify Token
+        Log::info("🚀 [Register] Step: Verifying Token with Cache");
         $verifiedPhone = Cache::get('reg_token_' . $request->reg_token);
         if (!$verifiedPhone) {
             return ApiResponse::error("Sesi pendaftaran tidak valid atau kadaluarsa. Silakan ulangi verifikasi OTP.", "invalid_token", null, 401);
@@ -201,6 +204,7 @@ class PasienRegistrationController extends Controller
         RateLimiter::hit($rateKey, 3600);
 
         // Final guard: Check NIK in main table
+        Log::info("🚀 [Register] Step: Checking NIK in Database (exists?)");
         if (DB::table('pasien')->where('no_ktp', $request->nik)->exists()) {
             return ApiResponse::error("NIK sudah terdaftar.", "nik_already_registered", null, 422);
         }
