@@ -52,7 +52,8 @@ class PresensiOnlineController extends Controller
      */
     private function verifyFace($masterPath, $submittedPath)
     {
-        $pythonPath = '/usr/bin/python3'; // As found in research
+        // Use python path from .env or default to the new venv path
+        $pythonPath = env('PYTHON_AI_PATH', '/home/sysadmin/ai_env_presensi/bin/python3');
         $scriptPath = base_path('face_verify.py');
         
         // Ensure absolute paths
