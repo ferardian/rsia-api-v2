@@ -2,8 +2,8 @@ import os
 import sys
 import json
 
-# Avoid permission errors and disk full by redirecting home to a writable path with more space
-os.environ['DEEPFACE_HOME'] = '/home/sysadmin/ai_env_presensi/.deepface'
+# Use the spacious venv directory for model storage
+os.environ['DEEPFACE_HOME'] = '/home/sysadmin/ai_env_presensi'
 
 # Fix for SymbolAlreadyExposedError in some TF/Keras versions
 os.environ['TF_USE_LEGACY_KERAS'] = '1'
@@ -14,16 +14,16 @@ from deepface import DeepFace
 
 def verify_faces(img1_path, img2_path):
     try:
-        # Perform verification
         # Using VGG-Face with cosine metric
         # align=True helps with accuracy for slightly tilted faces
+        # detector_backend='retinaface' is much more accurate than opencv
         result = DeepFace.verify(
             img1_path = img1_path,
             img2_path = img2_path,
             model_name = "VGG-Face",
             distance_metric = "cosine",
             enforce_detection = True,
-            detector_backend = "opencv", 
+            detector_backend = "retinaface", 
             align = True
         )
         
