@@ -8,6 +8,8 @@ os.environ['TF_USE_LEGACY_KERAS'] = '1'
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 from deepface import DeepFace
+
+def verify_faces(img1_path, img2_path):
     try:
         # Perform verification
         # Using VGG-Face with cosine metric
