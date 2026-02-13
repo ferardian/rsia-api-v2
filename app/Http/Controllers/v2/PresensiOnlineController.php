@@ -156,13 +156,21 @@ class PresensiOnlineController extends Controller
         if (!$isFirstTime && isset($faceCheck['master'])) {
             $verification = $this->verifyFace($faceCheck['master']->photo_path, $photoPath);
             
-            if (!$verification['success'] || !$verification['verified']) {
-                // Delete temp photo if failed
+            if (!$verification['success']) {
                 Storage::disk('public')->delete($photoPath);
-                
                 return response()->json([
                     'success' => false,
-                    'message' => 'Wajah tidak cocok (Score: ' . round($verification['distance'], 3) . '). Harap absen dengan wajah sendiri.',
+                    'message' => 'Gagal memproses verifikasi wajah: ' . ($verification['error'] ?? 'Unknown Error'),
+                ], 400);
+            }
+
+            if (!$verification['verified']) {
+                Storage::disk('public')->delete($photoPath);
+                
+                $score = isset($verification['distance']) ? round($verification['distance'], 3) : 'N/A';
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Wajah tidak cocok (Score: ' . $score . '). Harap absen dengan wajah sendiri.',
                     'distance' => $verification['distance'] ?? null,
                     'threshold' => $verification['threshold'] ?? null
                 ], 400);
@@ -259,12 +267,21 @@ class PresensiOnlineController extends Controller
         if (!$isFirstTime && isset($faceCheck['master'])) {
             $verification = $this->verifyFace($faceCheck['master']->photo_path, $photoPathOut);
             
-            if (!$verification['success'] || !$verification['verified']) {
+            if (!$verification['success']) {
                 Storage::disk('public')->delete($photoPathOut);
-                
                 return response()->json([
                     'success' => false,
-                    'message' => 'Wajah tidak cocok (Score: ' . round($verification['distance'], 3) . '). Harap absen dengan wajah sendiri.',
+                    'message' => 'Gagal memproses verifikasi wajah: ' . ($verification['error'] ?? 'Unknown Error'),
+                ], 400);
+            }
+
+            if (!$verification['verified']) {
+                Storage::disk('public')->delete($photoPathOut);
+                
+                $score = isset($verification['distance']) ? round($verification['distance'], 3) : 'N/A';
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Wajah tidak cocok (Score: ' . $score . '). Harap absen dengan wajah sendiri.',
                     'distance' => $verification['distance'] ?? null,
                     'threshold' => $verification['threshold'] ?? null
                 ], 400);

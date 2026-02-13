@@ -32,6 +32,13 @@ def verify_faces(img1_path, img2_path):
         
         print(json.dumps(output))
         
+    except ValueError as detect_error:
+        # This usually happens when "Face could not be detected"
+        output = {
+            "success": False,
+            "error": "Wajah tidak terdeteksi dengan jelas di salah satu foto. Pastikan pencahayaan cukup dan wajah menghadap kamera."
+        }
+        print(json.dumps(output))
     except Exception as e:
         output = {
             "success": False,
