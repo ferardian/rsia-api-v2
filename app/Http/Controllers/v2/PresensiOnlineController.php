@@ -347,7 +347,7 @@ class PresensiOnlineController extends Controller
             'status' => $tempPresensi->status,
             'keterlambatan' => $tempPresensi->keterlambatan,
             'durasi' => $durationFormatted,
-            'keterangan' => $tempPresensi->keterangan,
+            'keterangan' => $tempPresensi->keterangan ?? '-',
             'photo' => $tempPresensi->photo, // Keep check-in photo only
         ]);
 
