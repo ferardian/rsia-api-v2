@@ -43,6 +43,8 @@ class RekapPresensi extends Model
 
     protected $table = 'rekap_presensi';
 
+    public $timestamps = false; // Add this line to disable automatic timestamps
+
     protected $primaryKey = ['id', 'jam_datang'];
 
     protected $guarded = [];
