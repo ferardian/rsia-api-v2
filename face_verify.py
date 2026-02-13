@@ -2,6 +2,9 @@ import os
 import sys
 import json
 
+# Avoid permission errors and disk full by redirecting home to a writable path with more space
+os.environ['DEEPFACE_HOME'] = '/home/sysadmin/ai_env_presensi/.deepface'
+
 # Fix for SymbolAlreadyExposedError in some TF/Keras versions
 os.environ['TF_USE_LEGACY_KERAS'] = '1'
 # Set logging level for tensorflow to suppress warnings
