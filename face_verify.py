@@ -1,12 +1,13 @@
+import os
 import sys
 import json
-import os
-from deepface import DeepFace
 
+# Fix for SymbolAlreadyExposedError in some TF/Keras versions
+os.environ['TF_USE_LEGACY_KERAS'] = '1'
 # Set logging level for tensorflow to suppress warnings
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
-def verify_faces(img1_path, img2_path):
+from deepface import DeepFace
     try:
         # Perform verification
         # Using VGG-Face with cosine metric
