@@ -198,7 +198,7 @@ class OperasiController extends Controller
             }
             
             if ($request->start && $request->end) {
-                $query->whereBetween('tgl_operasi', [$request->start, $request->end]);
+                $query->whereBetween('tgl_operasi', [$request->start . ' 00:00:00', $request->end . ' 23:59:59']);
             }
 
             if ($request->has('kd_pj') && !empty($request->kd_pj)) {

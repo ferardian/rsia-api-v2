@@ -44,7 +44,7 @@ class RsiaPersalinanController extends Controller
         }
 
         if ($start && $end) {
-            $query->whereBetween('tgl_perawatan', [$start, $end]);
+            $query->whereBetween('tgl_perawatan', [$start . ' 00:00:00', $end . ' 23:59:59']);
         }
 
         if ($kd_pj) {
