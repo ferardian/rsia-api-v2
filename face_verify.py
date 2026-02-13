@@ -9,25 +9,25 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 def verify_faces(img1_path, img2_path):
     try:
         # Perform verification
-        # model_name options: VGG-Face, Facenet, Facenet512, OpenFace, DeepFace, DeepID, ArcFace, Dlib, SFace
-        # detector_backend options: opencv, retinaface, mtcnn, ssd, dlib, mediapipe, yolov8, centerface
-        
+        # Using VGG-Face with cosine metric
+        # align=True helps with accuracy for slightly tilted faces
         result = DeepFace.verify(
             img1_path = img1_path,
             img2_path = img2_path,
             model_name = "VGG-Face",
             distance_metric = "cosine",
             enforce_detection = True,
-            detector_backend = "opencv",
+            detector_backend = "opencv", 
             align = True
         )
         
-        # DeepFace result is a dict with: verified, distance, threshold, model, detector_backend, similarity_metric, facial_areas, time
         output = {
             "success": True,
             "verified": result["verified"],
             "distance": result["distance"],
-            "threshold": result["threshold"]
+            "threshold": result["threshold"],
+            "model": result.get("model", "VGG-Face"),
+            "detector": result.get("detector_backend", "opencv")
         }
         
         print(json.dumps(output))

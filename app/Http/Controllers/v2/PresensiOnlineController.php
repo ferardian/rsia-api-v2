@@ -162,8 +162,9 @@ class PresensiOnlineController extends Controller
                 
                 return response()->json([
                     'success' => false,
-                    'message' => 'Wajah tidak cocok dengan data master. Harap absen dengan wajah sendiri.',
-                    'distance' => $verification['distance'] ?? null
+                    'message' => 'Wajah tidak cocok (Score: ' . round($verification['distance'], 3) . '). Harap absen dengan wajah sendiri.',
+                    'distance' => $verification['distance'] ?? null,
+                    'threshold' => $verification['threshold'] ?? null
                 ], 400);
             }
         }
@@ -263,8 +264,9 @@ class PresensiOnlineController extends Controller
                 
                 return response()->json([
                     'success' => false,
-                    'message' => 'Wajah tidak cocok dengan data master. Harap absen dengan wajah sendiri.',
-                    'distance' => $verification['distance'] ?? null
+                    'message' => 'Wajah tidak cocok (Score: ' . round($verification['distance'], 3) . '). Harap absen dengan wajah sendiri.',
+                    'distance' => $verification['distance'] ?? null,
+                    'threshold' => $verification['threshold'] ?? null
                 ], 400);
             }
         }
