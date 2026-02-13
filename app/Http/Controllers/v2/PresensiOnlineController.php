@@ -8,6 +8,7 @@ use App\Models\RekapPresensi;
 use App\Models\JadwalPegawai;
 use App\Models\Pegawai;
 use App\Models\PegawaiFaceMaster;
+use App\Models\JamMasuk;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
@@ -190,17 +191,8 @@ class PresensiOnlineController extends Controller
             ], 400);
         }
 
-        // 3. Verify face is registered
-        $faceMaster = PegawaiFaceMaster::where('pegawai_id', $pegawai->id)
-            ->where('is_active', 1)
-            ->first();
-
-        if (!$faceMaster) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Wajah belum terdaftar. Silakan check-in terlebih dahulu.',
-            ], 400);
-        }
+        // 3. Ensure face is registered (auto-register if missing during checkout)
+        $this->ensureFaceRegistered($pegawai, $request->file('photo'));
 
         // 4. Check if checked in today
         $today = Carbon::today();
@@ -213,6 +205,32 @@ class PresensiOnlineController extends Controller
                 'success' => false,
                 'message' => 'Anda belum melakukan check-in hari ini',
             ], 400);
+        }
+
+        // 4.1 Enforce "1 hour before shift end" rule
+        $shiftInfo = JamMasuk::where('shift', $tempPresensi->shift)->first();
+        if ($shiftInfo) {
+            $jamDatang = $tempPresensi->jam_datang;
+            $jamPulangShift = Carbon::createFromFormat('H:i:s', $shiftInfo->jam_pulang);
+            $jamMasukShift = Carbon::createFromFormat('H:i:s', $shiftInfo->jam_masuk);
+            
+            // Determine actual scheduled return datetime
+            $scheduledReturn = $jamDatang->clone()->setTimeFrom($jamPulangShift);
+            
+            // Overnight shift handling: if jam_pulang < jam_masuk, pulang is next day
+            if ($jamPulangShift->lt($jamMasukShift)) {
+                $scheduledReturn->addDay();
+            }
+            
+            $earliestCheckout = $scheduledReturn->clone()->subHour();
+            $now = Carbon::now();
+            
+            if ($now->lt($earliestCheckout)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Belum masuk waktu pulang. Minimal jam ' . $earliestCheckout->format('H:i'),
+                ], 400);
+            }
         }
 
         // 5. Check if already checked out
