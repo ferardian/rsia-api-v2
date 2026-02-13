@@ -41,6 +41,7 @@ class RsiaOperasiSafe extends Model
             'detailAsistenAnestesi',
             'detailOnloop',
             'laporan',
+            'regPeriksa.pasien',
             'regPeriksa.diagnosaPasien.penyakit'
         ]);
     }

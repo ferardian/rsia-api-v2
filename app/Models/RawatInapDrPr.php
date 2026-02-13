@@ -62,4 +62,19 @@ class RawatInapDrPr extends Model
     {
         return $this->belongsTo(JenisPerawatanInap::class, 'kd_jenis_prw', 'kd_jenis_prw');
     }
+
+    public function regPeriksa()
+    {
+        return $this->belongsTo(RegPeriksa::class, 'no_rawat', 'no_rawat');
+    }
+
+    public function dokter()
+    {
+        return $this->belongsTo(Dokter::class, 'kd_dokter', 'kd_dokter');
+    }
+
+    public function petugas()
+    {
+        return $this->belongsTo(Petugas::class, 'nip', 'nip');
+    }
 }

@@ -13,6 +13,7 @@ Route::prefix('laporan/statistik')->group(function () {
     Route::get('ranap/indicators', [\App\Http\Controllers\v2\Laporan\Inap\BedIndicatorController::class, 'getIndicators']);
     Route::get('ranap/indicators/yearly', [\App\Http\Controllers\v2\Laporan\Inap\BedIndicatorController::class, 'getYearlyIndicators']);
     Route::get('ranap/morbiditas', [\App\Http\Controllers\v2\Laporan\RsiaMorbiditasRanapController::class, 'index']);
+    Route::get('ranap/persalinan', [\App\Http\Controllers\v2\Laporan\RsiaPersalinanController::class, 'index']);
     Route::get('ralan/morbiditas', [\App\Http\Controllers\v2\Laporan\RsiaMorbiditasRalanController::class, 'index']);
     Route::get('ralan/morbiditas/detail', [\App\Http\Controllers\v2\Laporan\RsiaMorbiditasRalanController::class, 'details']);
 });

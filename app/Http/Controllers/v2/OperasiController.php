@@ -249,6 +249,7 @@ class OperasiController extends Controller
     public function getLaporan(Request $request)
     {
         // Match exactly or loosely if datetime formatting varies
+        // Attempt to find by all keys first
         $laporan = RsiaOperasiSafe::withAllRelations()
             ->where('no_rawat', $request->no_rawat)
             ->where('kode_paket', $request->kode_paket)
@@ -257,6 +258,17 @@ class OperasiController extends Controller
                   ->orWhereDate('tgl_operasi', date('Y-m-d', strtotime($request->tgl_operasi)));
             })
             ->first();
+
+        // If not found, try without kode_paket as there might be a mismatch in paket coding
+        if (!$laporan) {
+            $laporan = RsiaOperasiSafe::withAllRelations()
+                ->where('no_rawat', $request->no_rawat)
+                ->where(function($q) use ($request) {
+                    $q->where('tgl_operasi', $request->tgl_operasi)
+                      ->orWhereDate('tgl_operasi', date('Y-m-d', strtotime($request->tgl_operasi)));
+                })
+                ->first();
+        }
 
         // If not found in Safe, check if there's at least the basic record
         if (!$laporan) {
