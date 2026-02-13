@@ -54,8 +54,12 @@ if __name__ == "__main__":
     img1 = sys.argv[1]
     img2 = sys.argv[2]
     
-    if not os.path.exists(img1) or not os.path.exists(img2):
-        print(json.dumps({"success": False, "error": "One or both image files do not exist."}))
+    # Debug info for paths
+    if not os.path.exists(img1):
+        print(json.dumps({"success": False, "error": f"Master image not found at path: {img1}"}))
+        sys.exit(1)
+    if not os.path.exists(img2):
+        print(json.dumps({"success": False, "error": f"Submitted image not found at path: {img2}"}))
         sys.exit(1)
         
     verify_faces(img1, img2)

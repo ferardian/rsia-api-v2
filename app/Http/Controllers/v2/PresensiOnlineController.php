@@ -63,7 +63,12 @@ class PresensiOnlineController extends Controller
         if (!file_exists($img2)) return ['success' => false, 'error' => 'Submitted photo not found'];
 
         $command = "{$pythonPath} {$scriptPath} ".escapeshellarg($img1)." ".escapeshellarg($img2);
-        $output = shell_exec($command);
+        
+        // Log for debugging (remove in production if sensitive)
+        \Log::info("Running Face Verify: " . $command);
+        
+        $output = shell_exec($command . " 2>&1"); // Capture stderr too
+        \Log::info("Face Verify Output: " . $output);
         
         $result = json_decode($output, true);
         
