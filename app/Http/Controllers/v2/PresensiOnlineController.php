@@ -48,6 +48,34 @@ class PresensiOnlineController extends Controller
     }
 
     /**
+     * AI Face Recognition: Compare two faces
+     */
+    private function verifyFace($masterPath, $submittedPath)
+    {
+        $pythonPath = '/usr/bin/python3'; // As found in research
+        $scriptPath = base_path('face_verify.py');
+        
+        // Ensure absolute paths
+        $img1 = storage_path('app/public/' . $masterPath);
+        $img2 = storage_path('app/public/' . $submittedPath);
+
+        if (!file_exists($img1)) return ['success' => false, 'error' => 'Master photo not found'];
+        if (!file_exists($img2)) return ['success' => false, 'error' => 'Submitted photo not found'];
+
+        $command = "{$pythonPath} {$scriptPath} ".escapeshellarg($img1)." ".escapeshellarg($img2);
+        $output = shell_exec($command);
+        
+        $result = json_decode($output, true);
+        
+        if (!$result || !isset($result['success']) || !$result['success']) {
+            \Log::error("Face verification error: " . ($result['error'] ?? 'Unknown error'));
+            return ['success' => false, 'error' => $result['error'] ?? 'Verification failed'];
+        }
+
+        return $result;
+    }
+
+    /**
      * Check-In: Save to temporary_presensi
      */
     public function checkIn(Request $request)
@@ -121,9 +149,24 @@ class PresensiOnlineController extends Controller
             ], 400);
         }
 
-        // 6. Store Photo (temporary, will be deleted after verification)
-        // In production, you might want to compare with master photo here
+        // 6. Store Photo (temporary)
         $photoPath = $request->file('photo')->store('presensi/temp/' . date('Y-m-d'), 'public');
+
+        // 6.1 AI Face Verification (only if not first time)
+        if (!$isFirstTime && isset($faceCheck['master'])) {
+            $verification = $this->verifyFace($faceCheck['master']->photo_path, $photoPath);
+            
+            if (!$verification['success'] || !$verification['verified']) {
+                // Delete temp photo if failed
+                Storage::disk('public')->delete($photoPath);
+                
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Wajah tidak cocok dengan data master. Harap absen dengan wajah sendiri.',
+                    'distance' => $verification['distance'] ?? null
+                ], 400);
+            }
+        }
 
         // 7. Determine status (Tepat Waktu / Terlambat)
         // TODO: Compare with shift start time from jam_masuk table
@@ -192,7 +235,8 @@ class PresensiOnlineController extends Controller
         }
 
         // 3. Ensure face is registered (auto-register if missing during checkout)
-        $this->ensureFaceRegistered($pegawai, $request->file('photo'));
+        $faceCheck = $this->ensureFaceRegistered($pegawai, $request->file('photo'));
+        $isFirstTime = $faceCheck['registered'] ?? false;
 
         // 4. Check if checked in today
         $today = Carbon::today();
@@ -205,6 +249,24 @@ class PresensiOnlineController extends Controller
                 'success' => false,
                 'message' => 'Anda belum melakukan check-in hari ini',
             ], 400);
+        }
+
+        // 4.0 AI Face Verification (only if not first time)
+        // Store current photo temporarily for verification
+        $photoPathOut = $request->file('photo')->store('presensi/temp/' . date('Y-m-d'), 'public');
+
+        if (!$isFirstTime && isset($faceCheck['master'])) {
+            $verification = $this->verifyFace($faceCheck['master']->photo_path, $photoPathOut);
+            
+            if (!$verification['success'] || !$verification['verified']) {
+                Storage::disk('public')->delete($photoPathOut);
+                
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Wajah tidak cocok dengan data master. Harap absen dengan wajah sendiri.',
+                    'distance' => $verification['distance'] ?? null
+                ], 400);
+            }
         }
 
         // 4.1 Enforce "1 hour before shift end" rule
@@ -246,10 +308,7 @@ class PresensiOnlineController extends Controller
             ], 400);
         }
 
-        // 6. Store Checkout Photo (temporary)
-        $photoPathOut = $request->file('photo')->store('presensi/temp/' . date('Y-m-d'), 'public');
-
-        // 7. Calculate duration
+        // 6. Calculate duration
         $jamPulang = Carbon::now();
         $duration = $tempPresensi->jam_datang->diff($jamPulang);
         $durationFormatted = $duration->format('%H:%I:%S');
