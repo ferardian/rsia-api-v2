@@ -17,9 +17,12 @@ use Carbon\Carbon;
 echo "--- DEBUG START ---\n";
 
 // 1. Inspect Table Columns
-$columns = DB::getSchemaBuilder()->getColumnListing('jadwal_pegawai');
-echo "Table 'jadwal_pegawai' Columns:\n";
+$columns = DB::getSchemaBuilder()->getColumnListing('temporary_presensi');
+echo "Table 'temporary_presensi' Columns:\n";
 print_r($columns);
+
+// Stop execution here as we only need column listing
+exit;
 
 // 2. Check Data for a Sample NIK (or hardcoded ID if needed)
 // Use the NIK from the previous context or a known valid one. 

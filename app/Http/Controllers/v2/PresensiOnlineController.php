@@ -195,7 +195,6 @@ class PresensiOnlineController extends Controller
             'jam_datang' => Carbon::now(),
             'status' => $status,
             'keterlambatan' => $keterlambatan,
-            'keterangan' => '',
             'photo' => $photoPath,
         ]);
 
