@@ -98,6 +98,14 @@ Route::get('/test-mapping-templates', function () {
 });
 
 
+// Vaccination
+Route::prefix('v2/vaccination')->group(function () {
+    Route::get('/', [\App\Http\Controllers\v2\VaccinationController::class, 'index']);
+    Route::post('/history', [\App\Http\Controllers\v2\VaccinationController::class, 'history']);
+    Route::post('/', [\App\Http\Controllers\v2\VaccinationController::class, 'store']);
+    Route::delete('/', [\App\Http\Controllers\v2\VaccinationController::class, 'destroy']);
+});
+
 
 $files = scandir(__DIR__ . '/partials');
 foreach ($files as $file) {

@@ -272,4 +272,14 @@ class Pegawai extends Model
     {
         return $this->hasOne(RsiaKualifikasiStafKlinis::class, 'nik', 'nik');
     }
+
+    /**
+     * Nomor kartu pegawai (BPJS/BPJSTK)
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\HasOne
+     */
+    public function nomorKartu()
+    {
+        return $this->hasOne(RsiaNomorKartuPegawai::class, 'nip', 'nik');
+    }
 }

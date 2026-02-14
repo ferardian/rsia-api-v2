@@ -33,7 +33,8 @@ class PegawaiController extends Controller
             })
             ->leftJoin('rsia_role as r', 'ur.id_role', '=', 'r.id_role')
             ->leftJoin('petugas as pt', 'pt.nip', '=', 'p.nik')
-            ->leftJoin('rsia_email_pegawai as rep', 'rep.nik', '=', 'p.nik') // Added
+            ->leftJoin('rsia_email_pegawai as rep', 'rep.nik', '=', 'p.nik')
+            ->leftJoin('rsia_nomor_kartu_pegawai as rnk', 'rnk.nip', '=', 'p.nik') // Added
             ->leftJoin('departemen as d', 'd.dep_id', '=', 'p.departemen')
             ->select([
                 'p.nik as id_user',
@@ -45,18 +46,20 @@ class PegawaiController extends Controller
                 'p.alamat',
                 'p.pendidikan',
                 'p.no_ktp',
+                'rnk.no_bpjs', // Added
+                'rnk.no_bpjstk', // Added
                 'pt.no_telp',
-                'rep.email', // Added
+                'rep.email',
                 'p.jbtn',
                 'p.departemen',
-                'd.nama as nama_departemen', // Added
+                'd.nama as nama_departemen',
                 'p.mulai_kerja',
                 'p.stts_aktif',
                 'p.photo',
                 \DB::raw('GROUP_CONCAT(r.id_role SEPARATOR ",") as id_role'),
                 \DB::raw('GROUP_CONCAT(r.nama_role SEPARATOR ", ") as nama_role')
             ])
-            ->groupBy('p.nik', 'p.nama', 'p.jk', 'p.tmp_lahir', 'p.tgl_lahir', 'p.alamat', 'p.pendidikan', 'p.no_ktp', 'pt.no_telp', 'rep.email', 'p.jbtn', 'p.departemen', 'd.nama', 'p.mulai_kerja', 'p.stts_aktif', 'p.photo')
+            ->groupBy('p.nik', 'p.nama', 'p.jk', 'p.tmp_lahir', 'p.tgl_lahir', 'p.alamat', 'p.pendidikan', 'p.no_ktp', 'rnk.no_bpjs', 'rnk.no_bpjstk', 'pt.no_telp', 'rep.email', 'p.jbtn', 'p.departemen', 'd.nama', 'p.mulai_kerja', 'p.stts_aktif', 'p.photo')
             ->orderBy('p.nama', 'asc')
             ->where('p.stts_aktif', 'AKTIF')
             ->where('pt.kd_jbtn', '<>', '-');
@@ -86,6 +89,8 @@ class PegawaiController extends Controller
                 'pendidikan' => $item->pendidikan,
                 'no_ktp' => $item->no_ktp,
                 'no_telp' => $item->no_telp,
+                'no_bpjs' => $item->no_bpjs, // Added
+                'no_bpjstk' => $item->no_bpjstk, // Added
                 'username' => $item->nik, // fallback to nik
                 'email' => $item->email, // Added
                 'id_role' => $primaryRoleId,
@@ -183,7 +188,15 @@ class PegawaiController extends Controller
                     ]);
                 }
 
-                $sql = "INSERT/UPDATE pegawai & petugas & email for nik: {$request->nik}";
+                // Create or Update Card Number
+                if ($request->no_bpjs || $request->no_bpjstk) {
+                    \App\Models\RsiaNomorKartuPegawai::updateOrCreate(['nip' => $request->nik], [
+                        'no_bpjs' => $request->no_bpjs,
+                        'no_bpjstk' => $request->no_bpjstk
+                    ]);
+                }
+
+                $sql = "INSERT/UPDATE pegawai & petugas & email & kartu for nik: {$request->nik}";
                 $this->logTracker($sql, $request);
             });
         } catch (\Exception $e) {
@@ -233,7 +246,7 @@ class PegawaiController extends Controller
         // Handle includes manually since we are not using Orion's automatic handling here
         if ($request->has('include')) {
             $includes = explode(',', $request->query('include'));
-            $allowedIncludes = ['dep', 'petugas', 'email', 'statusKerja'];
+            $allowedIncludes = ['dep', 'petugas', 'email', 'statusKerja', 'nomorKartu'];
             $validIncludes = array_intersect($includes, $allowedIncludes);
             
             if (!empty($validIncludes)) {
@@ -325,7 +338,15 @@ class PegawaiController extends Controller
                     ]);
                 }
 
-                $sql = "UPDATE pegawai & petugas & email for nik: {$id}";
+                // Update or Create Card Number
+                if ($request->no_bpjs || $request->no_bpjstk) {
+                    \App\Models\RsiaNomorKartuPegawai::updateOrCreate(['nip' => $id], [
+                        'no_bpjs' => $request->no_bpjs,
+                        'no_bpjstk' => $request->no_bpjstk
+                    ]);
+                }
+
+                $sql = "UPDATE pegawai & petugas & email & kartu for nik: {$id}";
                 $this->logTracker($sql, $request);
             });
         } catch (\Exception $e) {
@@ -528,7 +549,8 @@ class PegawaiController extends Controller
                          ->where('ur.is_active', 1);
                 })
                 ->leftJoin('rsia_role as r', 'ur.id_role', '=', 'r.id_role')
-                ->leftJoin('departemen as d', 'd.dep_id', '=', 'p.departemen') // Added Join
+                ->leftJoin('departemen as d', 'd.dep_id', '=', 'p.departemen')
+                ->leftJoin('rsia_nomor_kartu_pegawai as rnk', 'rnk.nip', '=', 'p.nik') // Added
                 ->where('p.stts_aktif', 'AKTIF')
                 ->where('pt.kd_jbtn', '<>', '-')
                 ->where(function($q) use ($query) {
@@ -547,17 +569,19 @@ class PegawaiController extends Controller
                     'p.alamat',
                     'p.pendidikan',
                     'p.no_ktp',
+                    'rnk.no_bpjs', // Added
+                    'rnk.no_bpjstk', // Added
                     'pt.no_telp',
                     'p.jbtn',
                     'p.departemen',
-                    'd.nama as nama_departemen', // Added
+                    'd.nama as nama_departemen',
                     'p.mulai_kerja',
                     'p.stts_aktif',
                     'p.photo',
                     \DB::raw('GROUP_CONCAT(r.id_role SEPARATOR ",") as id_role'),
                     \DB::raw('GROUP_CONCAT(r.nama_role SEPARATOR ", ") as nama_role')
                 ])
-                ->groupBy('p.nik', 'p.nama', 'p.jk', 'p.tmp_lahir', 'p.tgl_lahir', 'p.alamat', 'p.pendidikan', 'p.no_ktp', 'pt.no_telp', 'p.jbtn', 'p.departemen', 'd.nama', 'p.mulai_kerja', 'p.stts_aktif', 'p.photo')
+                ->groupBy('p.nik', 'p.nama', 'p.jk', 'p.tmp_lahir', 'p.tgl_lahir', 'p.alamat', 'p.pendidikan', 'p.no_ktp', 'rnk.no_bpjs', 'rnk.no_bpjstk', 'pt.no_telp', 'p.jbtn', 'p.departemen', 'd.nama', 'p.mulai_kerja', 'p.stts_aktif', 'p.photo')
                 ->limit($limit)
                 ->get();
 
@@ -579,6 +603,8 @@ class PegawaiController extends Controller
                     'pendidikan' => $item->pendidikan,
                     'no_ktp' => $item->no_ktp,
                     'no_telp' => $item->no_telp,
+                    'no_bpjs' => $item->no_bpjs, // Added
+                    'no_bpjstk' => $item->no_bpjstk, // Added
                     'username' => $item->nik,
                     'email' => null,
                     'id_role' => $primaryRoleId,
