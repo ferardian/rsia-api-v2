@@ -132,8 +132,8 @@ class PresensiOnlineController extends Controller
             ], 400);
         }
 
-        // Get shift for today (H1, H2, ... H31)
-        $shiftColumn = 'H' . $currentDay;
+        // Get shift for today (h1, h2, ... h31)
+        $shiftColumn = 'h' . $currentDay;
         $shift = $jadwal->$shiftColumn;
 
         if (!$shift || $shift === '-') {
