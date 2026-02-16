@@ -246,7 +246,7 @@ class PegawaiController extends Controller
         // Handle includes manually since we are not using Orion's automatic handling here
         if ($request->has('include')) {
             $includes = explode(',', $request->query('include'));
-            $allowedIncludes = ['dep', 'petugas', 'email', 'statusKerja', 'nomorKartu'];
+            $allowedIncludes = ['dep', 'petugas', 'email', 'statusKerja', 'nomorKartu', 'keluarga'];
             $validIncludes = array_intersect($includes, $allowedIncludes);
             
             if (!empty($validIncludes)) {
