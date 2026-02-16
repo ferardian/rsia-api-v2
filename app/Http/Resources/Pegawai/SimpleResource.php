@@ -23,6 +23,9 @@ class SimpleResource extends JsonResource
             if (!$pegawai->relationLoaded('petugas')) {
                 $pegawai->load('petugas:nip,no_telp');
             }
+            if (!$pegawai->relationLoaded('keluarga')) {
+                $pegawai->load('keluarga');
+            }
         } else {
             $pegawai = \App\Models\Pegawai::with(['email:nik,email', 'petugas:nip,no_telp'])
                 ->select('nik', 'nama', 'alamat', 'jk', 'jbtn', 'departemen', 'no_ktp', 'tmp_lahir', 'tgl_lahir')
@@ -45,7 +48,8 @@ class SimpleResource extends JsonResource
             'tmp_lahir' => $pegawai->tmp_lahir,
             'tgl_lahir' => $pegawai->tgl_lahir,
             'no_telp' => $pegawai->petugas->no_telp ?? \App\Models\Petugas::where('nip', $pegawai->nik)->value('no_telp'),
-            'email_resmi' => $pegawai->email->email ?? null
+            'email_resmi' => $pegawai->email->email ?? null,
+            'keluarga' => $this->whenLoaded('keluarga')
         ];
     }
 }

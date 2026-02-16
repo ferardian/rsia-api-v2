@@ -70,6 +70,18 @@ class UserAuthController extends Controller
     {
         $user = \Illuminate\Support\Facades\Auth::user();
         
+        if ($request->has('include')) {
+            $includes = explode(',', $request->query('include'));
+            $allowedIncludes = ['dep', 'petugas', 'email', 'statusKerja', 'nomorKartu', 'keluarga'];
+            $validIncludes = array_intersect($includes, $allowedIncludes);
+            
+            if (!empty($validIncludes)) {
+                $user->load(['detail' => function($query) use ($validIncludes) {
+                    $query->with($validIncludes);
+                }]);
+            }
+        }
+
         return new \App\Http\Resources\User\Auth\DetailResource($user);
     }
 }
