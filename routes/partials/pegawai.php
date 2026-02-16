@@ -51,4 +51,8 @@ Route::middleware(['auth:aes', 'claim:role,pegawai|dokter'])->group(function () 
   Route::post('presensi-online/check-out', [\App\Http\Controllers\v2\PresensiOnlineController::class, 'checkOut']);
   Route::get('presensi-online/status', [\App\Http\Controllers\v2\PresensiOnlineController::class, 'getStatus']);
   Route::get('presensi-online/config', [\App\Http\Controllers\v2\PresensiOnlineController::class, 'getConfig']);
+
+  // ==================== KELUARGA PEGAWAI
+  Route::apiResource('pegawai.keluarga', \App\Http\Controllers\v2\KeluargaPegawaiController::class)->only(['store', 'destroy'])
+    ->parameters(['pegawai' => 'nik', 'keluarga' => 'id']);
 });

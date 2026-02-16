@@ -282,4 +282,14 @@ class Pegawai extends Model
     {
         return $this->hasOne(RsiaNomorKartuPegawai::class, 'nip', 'nik');
     }
+
+    /**
+     * Keluarga pegawai data
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\HasMany
+     */
+    public function keluarga()
+    {
+        return $this->hasMany(KeluargaPegawai::class, 'nik', 'nik');
+    }
 }
