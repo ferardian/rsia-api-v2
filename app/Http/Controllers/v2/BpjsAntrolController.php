@@ -578,4 +578,24 @@ class BpjsAntrolController extends Controller
             'response' => $seps
         ]);
     }
+
+    /**
+     * Cancel queue
+     */
+    public function cancelAntrean(Request $request)
+    {
+        $request->validate([
+            'kodebooking' => 'required|string',
+            'keterangan' => 'required|string'
+        ]);
+
+        $payload = [
+            'kodebooking' => $request->kodebooking,
+            'keterangan' => $request->keterangan
+        ];
+
+        $response = $this->antrolService->cancelAntrean($payload);
+
+        return response()->json($response);
+    }
 }

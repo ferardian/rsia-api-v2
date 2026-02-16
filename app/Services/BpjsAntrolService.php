@@ -129,6 +129,16 @@ class BpjsAntrolService
     }
 
     /**
+     * Cancel queue
+     * @param array $payload
+     * @return array
+     */
+    public function cancelAntrean($payload)
+    {
+        return $this->post('/antrean/batal', $payload);
+    }
+
+    /**
      * Decrypt BPJS Antrol response
      * Key: consId + consSecret + timestamp
      * 

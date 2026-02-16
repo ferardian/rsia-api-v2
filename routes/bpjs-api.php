@@ -40,6 +40,7 @@ Route::group(['middleware' => ['auth:aes']], function () {
     Route::post('/bpjs/antrol/antrean/sync-queue', [\App\Http\Controllers\v2\BpjsAntrolController::class, 'syncTaskQueue']);
     Route::get('/bpjs/antrol/sep/count/{tanggal}', [\App\Http\Controllers\v2\BpjsAntrolController::class, 'getSepCount']);
     Route::get('/bpjs/antrol/sep/range/{tglAwal}/{tglAkhir}', [\App\Http\Controllers\v2\BpjsAntrolController::class, 'getSepCountByRange']);
+    Route::post('/bpjs/antrol/antrean/batal', [\App\Http\Controllers\v2\BpjsAntrolController::class, 'cancelAntrean']); // New Route
 
     // BPJS VClaim
     Route::get('/bpjs/vclaim/mapping/dokter', [\App\Http\Controllers\v2\BpjsVclaimController::class, 'indexMapping']);

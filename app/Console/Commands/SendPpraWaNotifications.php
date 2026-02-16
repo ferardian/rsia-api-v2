@@ -43,7 +43,8 @@ class SendPpraWaNotifications extends Command
                 $join->on('ro.no_rawat', '=', 'pr.no_rawat');
             })
             ->whereNull('log.no_resep')
-            // � Filter 1 jam terakhir untuk catch semua resep yang belum terkirim
+            ->where('map.status_notif', 1)
+            // 🕒 Filter 1 jam terakhir untuk catch semua resep yang belum terkirim
             ->where('ro.tgl_perawatan', '>=', now()->subHour()->toDateTimeString())
             ->where('ro.status', 'like', 'ranap%')
             // 🩺 Filter: Hanya dokter spesialis anak

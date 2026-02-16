@@ -42,6 +42,7 @@ class RsiaPpraMappingObatController extends Controller
             'kode_brng'       => 'required|exists:databarang,kode_brng',
             'rute_pemberian'  => 'nullable|string',
             'nilai_ddd_who'   => 'nullable|string',
+            'status_notif'    => 'nullable|in:0,1',
         ]);
 
         if (RsiaPpraMappingObat::where('kode_brng', $request->kode_brng)->exists()) {
@@ -71,6 +72,7 @@ class RsiaPpraMappingObatController extends Controller
         $validated = $request->validate([
             'rute_pemberian' => 'nullable|string',
             'nilai_ddd_who'  => 'nullable|string',
+            'status_notif'   => 'nullable|in:0,1',
         ]);
 
         $map->update($validated);

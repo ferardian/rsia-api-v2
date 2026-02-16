@@ -11,11 +11,16 @@ Route::middleware(['claim:role,pegawai|dokter|pasien'])->prefix('pasien')->group
 
     Route::post('riwayat/pemeriksaan/ralan/sync', [\App\Http\Controllers\v2\RiwayatPemeriksaanRalan::class, 'syncKlaim']);
     Route::post('riwayat/pemeriksaan/ranap/sync', [\App\Http\Controllers\v2\RiwayatPemeriksaanRanap::class, 'syncKlaim']);
+    
+    // Transfer Imunisasi
+    Route::get('transfer-imunisasi', [\App\Http\Controllers\v2\TransferImunisasiController::class, 'index']);
+    Route::post('transfer-imunisasi', [\App\Http\Controllers\v2\TransferImunisasiController::class, 'store']);
 
     Route::post('riwayat/pemeriksaan/ralan/delete/synced', [\App\Http\Controllers\v2\RiwayatPemeriksaanRalan::class, 'deleteSyncedData']);
     Route::post('riwayat/pemeriksaan/ranap/delete/synced', [\App\Http\Controllers\v2\RiwayatPemeriksaanRanap::class, 'deleteSyncedData']);
 
     // ==================== RIWAYAT PEMERIKSAAN PASIEN
+    Route::get('riwayat-pemeriksaan/{no_rkm_medis}', [\App\Http\Controllers\v2\RiwayatPemeriksaanPasienController::class, 'index']);
     Route::apiResource('.riwayat', \App\Http\Controllers\v2\RiwayatPemeriksaanPasienController::class)
         ->parameters(['' => 'no_rkm_medis', 'riwayat' => 'no_rawat'])->only(['index', 'show']);
 

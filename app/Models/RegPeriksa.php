@@ -231,11 +231,11 @@ class RegPeriksa extends Model
     /**
      * Get the pemeriksaan ralan that owns the registrasi.
      * 
-     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
+     * @return \Illuminate\Database\Eloquent\Relations\HasMany
      */
     public function pemeriksaanRalan()
     {
-        return $this->belongsTo(PemeriksaanRalan::class, 'no_rawat', 'no_rawat');
+        return $this->hasMany(PemeriksaanRalan::class, 'no_rawat', 'no_rawat');
     }
 
     /**

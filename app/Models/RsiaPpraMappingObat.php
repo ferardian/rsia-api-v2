@@ -7,8 +7,8 @@ use Illuminate\Database\Eloquent\Model;
 class RsiaPpraMappingObat extends Model
 {
     protected $table = 'rsia_ppra_mapping_obat';
-
-    protected $guarded = ['id'];
+ 
+    protected $fillable = ['kode_brng', 'rute_pemberian', 'nilai_ddd_who', 'status_notif'];
 
     public function barang()
     {

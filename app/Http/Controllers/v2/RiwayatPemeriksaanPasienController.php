@@ -25,10 +25,14 @@ class RiwayatPemeriksaanPasienController extends Controller
 
         $riwayatPemeriksaan = \App\Models\RegPeriksa::with('dokter', 'caraBayar', 'poliklinik')
             ->where('no_rkm_medis', $no_rkm_medis)
-            ->orderBy('tgl_registrasi', 'desc')
-            ->paginate();
+            ->orderBy('tgl_registrasi', 'desc');
 
-        return new RealDataCollection($riwayatPemeriksaan);
+        if (request()->has('include')) {
+            $include = explode(',', request()->query('include'));
+            $riwayatPemeriksaan->with($include);
+        }
+
+        return new RealDataCollection($riwayatPemeriksaan->paginate());
     }
 
     /**
