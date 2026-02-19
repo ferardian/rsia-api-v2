@@ -17,6 +17,8 @@ class RsiaPpraReportController extends Controller
         $kd_sps = $request->query('kd_sps');
         $kd_dokter = $request->query('kd_dokter');
         $search = $request->query('search');
+        $status_telaah = $request->query('status_telaah');
+        $status_persetujuan = $request->query('status_persetujuan');
 
         // Query resep yang obatnya terdaftar di ppra_mapping
         $query = DB::table('resep_obat')
@@ -59,6 +61,28 @@ class RsiaPpraReportController extends Controller
                     ->orWhere('pasien.no_rkm_medis', 'like', "%{$search}%")
                     ->orWhere('reg_periksa.no_rawat', 'like', "%{$search}%");
             });
+        }
+
+        if ($status_telaah) {
+            if ($status_telaah === 'BELUM') {
+                $query->where(function ($q) {
+                    $q->whereNull('rrv.status_telaah')
+                      ->orWhere('rrv.status_telaah', 'BELUM');
+                });
+            } else {
+                $query->where('rrv.status_telaah', $status_telaah);
+            }
+        }
+
+        if ($status_persetujuan) {
+            if ($status_persetujuan === 'PENDING') {
+                $query->where(function ($q) {
+                    $q->whereNull('rrv.status_persetujuan')
+                      ->orWhere('rrv.status_persetujuan', 'PENDING');
+                });
+            } else {
+                $query->where('rrv.status_persetujuan', $status_persetujuan);
+            }
         }
 
         $query->select([
