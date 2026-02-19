@@ -92,6 +92,9 @@ class RsiaPpraReportController extends Controller
             return ApiResponse::successWithData([], 'Laporan PPRA berhasil diambil');
         }
 
+        // Auto-fill aturan_pakai from RTL for rows with missing dosage
+        $autoFilledMap = $this->autoFillAturanPakai($results);
+
         // 1. Collect all unique no_rawat
         $noRawatList = $results->pluck('no_rawat')->unique()->toArray();
 
@@ -181,10 +184,14 @@ class RsiaPpraReportController extends Controller
             // Antibiotic grouping inside patient
             $ab_key = $item->nama_brng . '_' . $item->rute_pemberian . '_' . $item->tgl_perawatan;
             
-            // Logic: Utama Resep Dokter, Fallback Verifikasi
+            // Logic: Utama Resep Dokter, Fallback Verifikasi, Fallback Auto-fill RTL
             $original_aturan = $item->aturan_pakai_dokter;
             if (empty($original_aturan)) {
                 $original_aturan = $item->aturan_pakai_verif;
+            }
+            if (empty($original_aturan)) {
+                $afKey = $item->no_resep . '_' . $item->kode_brng;
+                $original_aturan = $autoFilledMap[$afKey] ?? null;
             }
 
             // Parse dosage using regex
@@ -472,6 +479,111 @@ class RsiaPpraReportController extends Controller
         }
 
         return ApiResponse::successWithData($finalData, 'Rekap bulanan PPRA berhasil diambil');
+    }
+
+    /**
+     * Auto-fill aturan_pakai from pemeriksaan_ranap.rtl for rows that have no dosage info.
+     * Bulk processes all missing rows and saves results to rsia_ppra_resep_verifikasi.
+     * 
+     * @param \Illuminate\Support\Collection $results - Query results from laporan()
+     * @return array - Map of [no_resep_kode_brng => extracted_aturan_pakai]
+     */
+    private function autoFillAturanPakai($results)
+    {
+        $autoFilled = [];
+
+        // 1. Collect rows that need auto-fill (no aturan_pakai from dokter or verifikasi)
+        $needsFill = [];
+        foreach ($results as $item) {
+            if (empty($item->aturan_pakai_dokter) && empty($item->aturan_pakai_verif)) {
+                $key = $item->no_resep . '_' . $item->kode_brng;
+                if (!isset($needsFill[$key])) {
+                    $needsFill[$key] = $item;
+                }
+            }
+        }
+
+        if (empty($needsFill)) {
+            return $autoFilled;
+        }
+
+        // 2. Bulk fetch RTL data for all relevant no_rawat
+        $noRawatList = collect($needsFill)->pluck('no_rawat')->unique()->toArray();
+
+        $rtlData = DB::table('pemeriksaan_ranap')
+            ->whereIn('no_rawat', $noRawatList)
+            ->where('rtl', '!=', '')
+            ->whereNotNull('rtl')
+            ->orderBy('tgl_perawatan', 'desc')
+            ->orderBy('jam_rawat', 'desc')
+            ->select('no_rawat', 'tgl_perawatan', 'jam_rawat', 'rtl')
+            ->get()
+            ->groupBy('no_rawat');
+
+        // Dosage regex patterns (same as getSoapSuggestions)
+        $dosageRegex = '/(\d+(?:[\.,]\d+)?\s*x\s*\d+(?:[\.,]\d+)?\s*[a-z]+|\d+(?:[\.,]\d+)?\s*[a-z]+\s*\/\s*\d+\s*jam|\d+(?:[\.,]\d+)?\s*[a-z]+\s*(?:ekstra|extra))/i';
+
+        // 3. For each item needing fill, search RTL for medicine name + dosage
+        $toSave = [];
+        foreach ($needsFill as $key => $item) {
+            $soapEntries = $rtlData->get($item->no_rawat, collect());
+            if ($soapEntries->isEmpty()) continue;
+
+            // Lenient medicine name matching
+            $fullName = strtolower($item->nama_brng);
+            $firstWord = explode(' ', $fullName)[0];
+            $matchCriteria = [$firstWord];
+            if (strlen($firstWord) >= 5) {
+                $matchCriteria[] = substr($firstWord, 0, 4);
+            }
+
+            $bestMatch = null;
+
+            foreach ($soapEntries as $soap) {
+                // Prefer RTL entries closest to (but <= ) the prescription date
+                if ($soap->tgl_perawatan > $item->tgl_perawatan) continue;
+
+                $lines = explode("\n", $soap->rtl);
+                foreach ($lines as $line) {
+                    $lineLower = strtolower($line);
+                    $isMatch = false;
+                    foreach ($matchCriteria as $criterion) {
+                        if (strpos($lineLower, $criterion) !== false) {
+                            $isMatch = true;
+                            break;
+                        }
+                    }
+
+                    if ($isMatch && preg_match($dosageRegex, $line, $matches)) {
+                        $bestMatch = $matches[1];
+                        break 2; // Found best match (newest RTL first), stop searching
+                    }
+                }
+            }
+
+            if ($bestMatch) {
+                $autoFilled[$key] = $bestMatch;
+                $toSave[] = [
+                    'no_resep' => $item->no_resep,
+                    'kode_brng' => $item->kode_brng,
+                    'aturan_pakai' => $bestMatch,
+                ];
+            }
+        }
+
+        // 4. Bulk save to rsia_ppra_resep_verifikasi
+        foreach ($toSave as $row) {
+            DB::table('rsia_ppra_resep_verifikasi')->updateOrInsert(
+                ['no_resep' => $row['no_resep'], 'kode_brng' => $row['kode_brng']],
+                [
+                    'aturan_pakai' => $row['aturan_pakai'],
+                    'nik_petugas' => 'SYSTEM_AUTO',
+                    'updated_at' => now(),
+                ]
+            );
+        }
+
+        return $autoFilled;
     }
 
     private function parseAturanPakai($string)
