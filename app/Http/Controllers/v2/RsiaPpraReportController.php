@@ -553,36 +553,51 @@ class RsiaPpraReportController extends Controller
             $soapEntries = $rtlData->get($item->no_rawat, collect());
             if ($soapEntries->isEmpty()) continue;
 
-            // Lenient medicine name matching
+            // Lenient medicine name matching (handles typos in RTL)
             $fullName = strtolower($item->nama_brng);
             $firstWord = explode(' ', $fullName)[0];
             $matchCriteria = [$firstWord];
             if (strlen($firstWord) >= 5) {
-                $matchCriteria[] = substr($firstWord, 0, 4);
+                $matchCriteria[] = substr($firstWord, 0, 4); // "ceft"
+                $matchCriteria[] = substr($firstWord, 1, 4); // "eftr" (handles prefix typos like "cveftriaxon")
+            }
+            if (strlen($firstWord) >= 4) {
+                $matchCriteria[] = substr($firstWord, 0, 3); // "cef"
             }
 
             $bestMatch = null;
 
-            foreach ($soapEntries as $soap) {
-                // Prefer RTL entries closest to (but <= ) the prescription date
-                if ($soap->tgl_perawatan > $item->tgl_perawatan) continue;
+            // Helper to search RTL entries for medicine name + dosage
+            $searchEntries = function($entries) use ($matchCriteria, $dosageRegex) {
+                foreach ($entries as $soap) {
+                    $lines = explode("\n", $soap->rtl);
+                    foreach ($lines as $line) {
+                        $lineLower = strtolower($line);
+                        $isMatch = false;
+                        foreach ($matchCriteria as $criterion) {
+                            if (strpos($lineLower, $criterion) !== false) {
+                                $isMatch = true;
+                                break;
+                            }
+                        }
 
-                $lines = explode("\n", $soap->rtl);
-                foreach ($lines as $line) {
-                    $lineLower = strtolower($line);
-                    $isMatch = false;
-                    foreach ($matchCriteria as $criterion) {
-                        if (strpos($lineLower, $criterion) !== false) {
-                            $isMatch = true;
-                            break;
+                        if ($isMatch && preg_match($dosageRegex, $line, $matches)) {
+                            return $matches[1];
                         }
                     }
-
-                    if ($isMatch && preg_match($dosageRegex, $line, $matches)) {
-                        $bestMatch = $matches[1];
-                        break 2; // Found best match (newest RTL first), stop searching
-                    }
                 }
+                return null;
+            };
+
+            // Pass 1: Prefer RTL entries with date <= prescription date (already sorted newest first)
+            $beforeEntries = $soapEntries->filter(fn($s) => $s->tgl_perawatan <= $item->tgl_perawatan);
+            $bestMatch = $searchEntries($beforeEntries);
+
+            // Pass 2: If not found, try entries AFTER prescription date (sorted by closest date)
+            if (!$bestMatch) {
+                $afterEntries = $soapEntries->filter(fn($s) => $s->tgl_perawatan > $item->tgl_perawatan)
+                    ->sortBy('tgl_perawatan');
+                $bestMatch = $searchEntries($afterEntries);
             }
 
             if ($bestMatch) {
