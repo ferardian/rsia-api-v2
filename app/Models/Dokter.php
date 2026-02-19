@@ -89,4 +89,9 @@ class Dokter extends Model
         return $this->hasOneThrough(SidikJari::class, Pegawai::class, 'nik', 'id', 'kd_dokter', 'id')
                 ->select('sidikjari.id', DB::raw('SHA1(sidikjari) as sidikjari'));
     }
+
+    public function mappingBpjs()
+    {
+        return $this->hasOne(MappingDokterBpjs::class, 'kd_dokter', 'kd_dokter');
+    }
 }

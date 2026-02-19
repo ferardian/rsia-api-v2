@@ -579,6 +579,106 @@ class BpjsAntrolController extends Controller
         ]);
     }
 
+    public function syncTaskQueueBulk(Request $request)
+    {
+        $request->validate([
+            'kodebookings' => 'required|array',
+            'kodebookings.*' => 'string'
+        ]);
+
+        $kodebookings = $request->kodebookings;
+        $results = [];
+
+        foreach ($kodebookings as $kodebooking) {
+            $referensi = \App\Models\ReferensiMobilejknBpjs::where('nobooking', $kodebooking)->first();
+            if (!$referensi) {
+                $results[$kodebooking] = ['status' => 'Data antrean tidak ditemukan'];
+                continue;
+            }
+
+            $no_rawat = $referensi->no_rawat;
+            $hasResep = \App\Models\ResepObat::where('no_rawat', $no_rawat)->exists();
+
+            $patientTasks = [];
+            
+            try {
+                // Task 3: Mulai Pemeriksaan
+                $task3 = \App\Models\PemeriksaanRalan::where('no_rawat', $no_rawat)->first();
+                if ($task3) {
+                    $waktu3 = strtotime($task3->tgl_perawatan . ' ' . $task3->jam_rawat) * 1000;
+                    $patientTasks['task3'] = $this->antrolService->post("/antrean/updatewaktu", [
+                        'kodebooking' => $kodebooking,
+                        'taskid' => 3,
+                        'waktu' => $waktu3
+                    ]);
+                }
+                
+                // Task 4: Estimasi Selesai Pemeriksaan
+                $task4 = \Illuminate\Support\Facades\DB::table('rsia_estimasi_poli')->where('no_rawat', $no_rawat)->first();
+                if ($task4) {
+                    $waktu4 = strtotime($task4->jam_periksa) * 1000;
+                    $patientTasks['task4'] = $this->antrolService->post("/antrean/updatewaktu", [
+                        'kodebooking' => $kodebooking,
+                        'taskid' => 4,
+                        'waktu' => $waktu4
+                    ]);
+                }
+                
+                // Task 5: Selesai Pemeriksaan / Peresepan
+                $task5Resep = \App\Models\ResepObat::where('no_rawat', $no_rawat)
+                    ->where('tgl_peresepan', '!=', '0000-00-00')
+                    ->orderBy('no_resep', 'desc')
+                    ->first();
+                if ($task5Resep) {
+                    $waktu5 = strtotime($task5Resep->tgl_peresepan . ' ' . $task5Resep->jam_peresepan) * 1000;
+                } else {
+                    $task5Selesai = \Illuminate\Support\Facades\DB::table('rsia_selesai_poli')->where('no_rawat', $no_rawat)->first();
+                    if ($task5Selesai) {
+                        $waktu5 = strtotime($task5Selesai->jam_periksa) * 1000;
+                    }
+                }
+                if (isset($waktu5)) {
+                    $patientTasks['task5'] = $this->antrolService->post("/antrean/updatewaktu", [
+                        'kodebooking' => $kodebooking,
+                        'taskid' => 5,
+                        'waktu' => $waktu5
+                    ]);
+                }
+                
+                if ($hasResep) {
+                    $task6 = \App\Models\ResepObat::where('no_rawat', $no_rawat)
+                        ->where('tgl_peresepan', '!=', '0000-00-00')
+                        ->orderBy('no_resep', 'desc')
+                        ->first();
+                    if ($task6 && $task6->tgl_perawatan && $task6->jam) {
+                        $waktu6 = strtotime($task6->tgl_perawatan . ' ' . $task6->jam) * 1000;
+                        $patientTasks['task6'] = $this->antrolService->post("/antrean/updatewaktu", [
+                            'kodebooking' => $kodebooking,
+                            'taskid' => 6,
+                            'waktu' => $waktu6
+                        ]);
+                    }
+                    if ($task6 && $task6->tgl_penyerahan && $task6->jam_penyerahan) {
+                        $waktu7 = strtotime($task6->tgl_penyerahan . ' ' . $task6->jam_penyerahan) * 1000;
+                        $patientTasks['task7'] = $this->antrolService->post("/antrean/updatewaktu", [
+                            'kodebooking' => $kodebooking,
+                            'taskid' => 7,
+                            'waktu' => $waktu7
+                        ]);
+                    }
+                }
+                $results[$kodebooking] = $patientTasks;
+            } catch (\Exception $e) {
+                $results[$kodebooking] = ['error' => $e->getMessage()];
+            }
+        }
+        
+        return response()->json([
+            'metadata' => ['code' => 200, 'message' => 'Sinkronisasi bulk berhasil'],
+            'response' => $results
+        ]);
+    }
+
     /**
      * Cancel queue
      */

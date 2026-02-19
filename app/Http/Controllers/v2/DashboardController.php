@@ -11,6 +11,8 @@ use App\Models\RsiaCuti;
 use App\Models\RegPeriksa;
 use Carbon\Carbon;
 
+use App\Services\GoogleReviewService;
+
 class DashboardController extends Controller
 {
     /**
@@ -1234,5 +1236,23 @@ class DashboardController extends Controller
 
         // Default to Umum
         return 'Umum';
+    }
+
+    /**
+     * Get Google Reviews (Mock Data)
+     * 
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getReviews()
+    {
+        try {
+            $service = new GoogleReviewService();
+            $reviews = $service->getReviews();
+            
+            return ApiResponse::success('Google reviews retrieved successfully', $reviews);
+        } catch (\Exception $e) {
+            \Log::error('Get Google Reviews Error: ' . $e->getMessage());
+            return ApiResponse::error('Failed to retrieve google reviews', 'internal_server_error', null, 500);
+        }
     }
 }

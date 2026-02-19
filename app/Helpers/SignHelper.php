@@ -67,11 +67,8 @@ class SignHelper
      */
     public static function sign($consId, $consSecret)
     {
-        // Set UTC timezone as per BPJS reference
-        date_default_timezone_set('UTC');
-
-        // Compute timestamp as per BPJS reference
-        $timestamp = strval(time() - strtotime('1970-01-01 00:00:00'));
+        // Compute timestamp (always UTC for Unix timestamp)
+        $timestamp = strval(time());
 
         // Generate the string to sign
         $stringToSign = $consId . '&' . $timestamp;

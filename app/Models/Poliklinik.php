@@ -44,4 +44,9 @@ class Poliklinik extends Model
     {
         return $this->hasMany(JadwalPoli::class, 'kd_poli', 'kd_poli');
     }
+
+    public function mappingBpjs()
+    {
+        return $this->hasOne(MappingPoliBpjs::class, 'kd_poli_rs', 'kd_poli');
+    }
 }

@@ -12,4 +12,7 @@ Route::middleware(['auth:aes', 'claim:role,pegawai|dokter'])->group(function () 
     Route::get('codeblue/schedule/{date}', [\App\Http\Controllers\v2\DashboardController::class, 'getCodeBlueScheduleByDate'])->name('codeblue.schedule.bydate');
     Route::post('codeblue/schedule', [\App\Http\Controllers\v2\DashboardController::class, 'saveCodeBlueSchedule'])->name('codeblue.schedule.save');
     Route::delete('codeblue/schedule/{date}', [\App\Http\Controllers\v2\DashboardController::class, 'deleteCodeBlueSchedule'])->name('codeblue.schedule.delete');
+
+    // Google Reviews
+    Route::get('dashboard/reviews', [\App\Http\Controllers\v2\DashboardController::class, 'getReviews'])->name('dashboard.reviews');
 });

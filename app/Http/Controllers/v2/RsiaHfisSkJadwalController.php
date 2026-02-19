@@ -12,9 +12,65 @@ use Barryvdh\DomPDF\Facade\Pdf;
 
 class RsiaHfisSkJadwalController extends Controller
 {
+    protected $hfisService;
+
+    public function __construct(\App\Services\BpjsHfisService $hfisService)
+    {
+        $this->hfisService = $hfisService;
+    }
+
+    public function getHfismasterResources()
+    {
+        $poli = \App\Models\MappingPoliBpjs::all();
+        return response()->json(['status' => 'success', 'data' => ['poli' => $poli]]);
+    }
+
+    public function updateHfis(Request $request)
+    {
+        $request->validate([
+            'kodepoli' => 'required',
+            'kodesubspesialis' => 'required',
+            'kodedokter' => 'required',
+            'jadwal' => 'required|array',
+            'jadwal.*.hari' => 'required',
+            'jadwal.*.buka' => 'required',
+            'jadwal.*.tutup' => 'required',
+        ]);
+
+        $payload = [
+            'kodepoli' => $request->kodepoli,
+            'kodesubspesialis' => $request->kodesubspesialis,
+            'kodedokter' => (int) $request->kodedokter,
+            'jadwal' => $request->jadwal
+        ];
+
+        $response = $this->hfisService->updateJadwalDokter($payload);
+        
+        // Check if response has metadata code 200 or 1 (success)
+        $code = $response['metadata']['code'] ?? 500;
+        
+        if ($code == 200 || $code == 1) {
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Jadwal berhasil diupdate ke HFIS',
+                'data' => $response
+            ]);
+        } else {
+            return response()->json([
+                'status' => 'error',
+                'message' => $response['metadata']['message'] ?? 'Gagal update jadwal',
+                'data' => $response
+            ], 400);
+        }
+    }
     public function index(Request $request)
     {
-        $query = RsiaHfisSkJadwal::with(['dokter.spesialis', 'detail']);
+        $query = RsiaHfisSkJadwal::with([
+            'dokter.spesialis', 
+            'dokter.mappingBpjs',
+            'dokter.jadwal.poliklinik.mappingBpjs',
+            'detail'
+        ]);
 
         if ($request->has('kd_dokter')) {
             $query->where('kd_dokter', $request->kd_dokter);
@@ -70,7 +126,12 @@ class RsiaHfisSkJadwalController extends Controller
 
     public function show($id)
     {
-        $data = RsiaHfisSkJadwal::with(['dokter.spesialis', 'detail'])->find($id);
+        $data = RsiaHfisSkJadwal::with([
+            'dokter.spesialis', 
+            'dokter.mappingBpjs',
+            'dokter.jadwal.poliklinik.mappingBpjs',
+            'detail'
+        ])->find($id);
 
         if (!$data) {
             return response()->json(['status' => 'error', 'message' => 'Data tidak ditemukan'], 404);

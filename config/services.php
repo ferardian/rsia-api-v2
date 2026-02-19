@@ -58,6 +58,13 @@ return [
         ]
     ],
 
+    'google' => [
+        'places' => [
+            'api_key' => env('GOOGLE_PLACES_API_KEY'),
+            'place_id' => env('GOOGLE_PLACE_ID'),
+        ]
+    ],
+
     'snowstorm' => [
         'url' => env('SNOWSTORM_URL', 'http://localhost:8080'),
     ],

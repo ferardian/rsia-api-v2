@@ -11,4 +11,8 @@ Route::prefix('sdi/hfis/sk-jadwal')->middleware(['detail-user', 'claim:role,pega
     Route::delete('/{id}', [RsiaHfisSkJadwalController::class, 'destroy']);
     Route::get('/{id}/pdf', [RsiaHfisSkJadwalController::class, 'generatePdf']);
     Route::post('/pdf/bulk', [RsiaHfisSkJadwalController::class, 'generatePdfBulk']);
+    
+    // HFIS Integration
+    Route::get('/resource/poli-mappings', [RsiaHfisSkJadwalController::class, 'getHfismasterResources']);
+    Route::post('/update-jadwal', [RsiaHfisSkJadwalController::class, 'updateHfis']);
 });
