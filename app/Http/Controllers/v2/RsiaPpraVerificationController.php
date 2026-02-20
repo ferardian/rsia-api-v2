@@ -96,18 +96,23 @@ class RsiaPpraVerificationController extends Controller
             'sender' => 'required|string',  // WA Number (e.g. 628123...)
         ]);
 
+        $senderPhone = preg_replace('/[^0-9]/', '', $request->sender);
+
         // 1. Map phone number to employee
-        $cleanSender = preg_replace('/[^0-9]/', '', $request->sender);
-        // Usually ends with the actual number (ignoring 62/0/+)
-        $searchPhone = substr($cleanSender, -10); 
+        $searchPhone = substr($senderPhone, -10);
 
         $petugas = DB::table('petugas')
             ->join('rsia_tim_ppra', 'petugas.nip', '=', 'rsia_tim_ppra.nik')
             ->where('petugas.no_telp', 'like', '%' . $searchPhone)
-            ->select('petugas.nip', 'rsia_tim_ppra.jabatan', 'rsia_tim_ppra.role')
+            ->select('petugas.nip', 'petugas.nama', 'rsia_tim_ppra.jabatan', 'rsia_tim_ppra.role')
             ->first();
 
         if (!$petugas) {
+            $this->sendWaReply($senderPhone,
+                "❌ *Gagal diproses*\n" .
+                "Nomor Anda tidak terdaftar sebagai anggota Tim PPRA.\n\n" .
+                "_Silakan hubungi admin PPRA jika ini kesalahan._"
+            );
             return ApiResponse::error('Nomor pengirim tidak terdaftar sebagai Tim PPRA', 403);
         }
 
@@ -117,6 +122,11 @@ class RsiaPpraVerificationController extends Controller
             ->first();
 
         if (!$log) {
+            $this->sendWaReply($senderPhone,
+                "❌ *Gagal diproses*\n" .
+                "Kode *{$request->code}* tidak ditemukan atau sudah tidak berlaku.\n\n" .
+                "_Pastikan kode yang Anda masukkan sesuai dengan notifikasi._"
+            );
             return ApiResponse::error('Kode verifikasi tidak valid atau sudah kadaluarsa', 404);
         }
 
@@ -126,12 +136,12 @@ class RsiaPpraVerificationController extends Controller
 
         // 3. Logic based on role and command
         $status_msg = "";
-        if (
-            str_contains(strtolower($petugas->jabatan), 'apoteker') || 
-            str_contains(strtolower($petugas->jabatan), 'farmasi') ||
-            str_contains(strtolower($petugas->role), 'apoteker') || 
-            str_contains(strtolower($petugas->role), 'farmasi')
-        ) {
+        $isApoteker = str_contains(strtolower($petugas->jabatan), 'apoteker') ||
+                      str_contains(strtolower($petugas->jabatan), 'farmasi') ||
+                      str_contains(strtolower($petugas->role), 'apoteker') ||
+                      str_contains(strtolower($petugas->role), 'farmasi');
+
+        if ($isApoteker) {
             // Pharmacist Review (Telaah)
             $data['petugas_telaah'] = $petugas->nip;
             $data['status_telaah'] = strtoupper($request->command) == 'ACC' ? 'SESUAI' : 'TIDAK SESUAI';
@@ -152,7 +162,27 @@ class RsiaPpraVerificationController extends Controller
             $data
         );
 
-        // 4. If Pharmacist ACCs -> Forward to Ketua PPRA
+        // 4. Kirim konfirmasi balik ke pengirim
+        $commandLabel = strtoupper($request->command) == 'ACC'
+            ? ($isApoteker ? '✅ SESUAI (Telaah Apoteker)' : '✅ ACC (Persetujuan Ketua)')
+            : ($isApoteker ? '❌ TIDAK SESUAI (Telaah Apoteker)' : '❌ TOLAK (Persetujuan Ketua)');
+
+        $catatanLine = $request->comment ? "• Catatan: {$request->comment}\n" : "";
+
+        $this->sendWaReply($senderPhone,
+            "✅ *Respon Anda Berhasil Direkam*\n" .
+            "━━━━━━━━━━━━━━━━━━━\n" .
+            "📋 *Detail:*\n" .
+            "• Kode: {$log->short_code}\n" .
+            "• No. Resep: {$log->no_resep}\n" .
+            "• Status: {$commandLabel}\n" .
+            $catatanLine .
+            "• Waktu: " . now()->setTimezone('Asia/Jakarta')->format('d/m/Y H:i') . " WIB\n" .
+            "━━━━━━━━━━━━━━━━━━━\n" .
+            "_Data telah diperbarui dalam sistem PPRA RSIA Aisyiyah._"
+        );
+
+        // 5. If Pharmacist ACCs -> Forward to Ketua PPRA
         if (isset($data['status_telaah']) && $data['status_telaah'] == 'SESUAI') {
             $this->notifyKetua($log->no_resep, $log->kode_brng, $log->short_code, $petugas->nip);
         }
@@ -163,6 +193,33 @@ class RsiaPpraVerificationController extends Controller
             'role' => $petugas->jabatan,
             'status' => strtoupper($request->command)
         ]);
+    }
+
+    /**
+     * Kirim pesan WA balasan ke pengirim (via n8n).
+     * Digunakan untuk konfirmasi sukses maupun notif error.
+     */
+    protected function sendWaReply(string $phone, string $message): void
+    {
+        try {
+            // Normalize: pastikan format 62xxx
+            if (str_starts_with($phone, '0')) {
+                $phone = '62' . substr($phone, 1);
+            } elseif (!str_starts_with($phone, '62')) {
+                $phone = '62' . $phone;
+            }
+
+            $n8nUrl = config('services.n8n.url') . '/webhook/ppra-outgoing-notif';
+
+            Http::timeout(10)->post($n8nUrl, [
+                'phone'        => $phone,
+                'message_text' => $message,
+                'type'         => 'PPRA_REPLY',
+            ]);
+        } catch (\Exception $e) {
+            // Gagal kirim WA reply tidak boleh mengganggu proses utama
+            \Log::warning('[PPRA] Gagal kirim WA reply ke ' . $phone . ': ' . $e->getMessage());
+        }
     }
 
     protected function notifyKetua($no_resep, $kode_brng, $shortCode, $nipApoteker)

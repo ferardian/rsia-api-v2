@@ -22,21 +22,29 @@ class SendWhatsApp implements ShouldQueue
     protected $noHp;
 
     /**
-     * The OTP code
+     * The message text
      * 
      * @var string
      * */
     protected $message;
 
     /**
+     * Optional WAHA session name override
+     * 
+     * @var string|null
+     * */
+    protected $sessionName;
+
+    /**
      * Create a new job instance.
      *
      * @return void
      */
-    public function __construct(String $noHp, String $message)
+    public function __construct(String $noHp, String $message, ?string $sessionName = null)
     {
         $this->noHp = $noHp;
         $this->message = $message;
+        $this->sessionName = $sessionName;
     }
 
     /**
@@ -49,7 +57,7 @@ class SendWhatsApp implements ShouldQueue
         // Get WhatsApp API configuration from config (mapped from .env)
         $apiUrl = config('services.whatsapp.url');
         $apiKey = config('services.whatsapp.key');
-        $sessionName = config('services.whatsapp.session');
+        $sessionName = $this->sessionName ?? config('services.whatsapp.session');
         
         // Format phone number (remove leading 0, add 62 for Indonesia)
         $phone = $this->noHp;

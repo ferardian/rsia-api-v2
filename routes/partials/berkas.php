@@ -6,10 +6,12 @@ use Illuminate\Support\Facades\Route;
 Route::middleware(['auth:aes', 'claim:role,pegawai'])->prefix('surat')->group(function () {
 
   // ==================== SURAT INTERNAL  
+  Route::get('internal/stats', [\App\Http\Controllers\Orion\RsiaSuratInternalController::class, 'stats']);
   Orion::resource('internal', \App\Http\Controllers\Orion\RsiaSuratInternalController::class)->only(['search', 'store', 'show', 'update', 'destroy'])
     ->parameters(['internal' => 'id']);
 
   // ==================== SURAT EKSTERNAL
+  Route::get('eksternal/stats', [\App\Http\Controllers\Orion\RsiaSuratEksternalController::class, 'stats']);
   Orion::resource('eksternal', \App\Http\Controllers\Orion\RsiaSuratEksternalController::class)->only(['index', 'search', 'store', 'show', 'update'])
     ->parameters(['eksternal' => 'base64_nomor_surat']);
 

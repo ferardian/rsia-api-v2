@@ -41,8 +41,8 @@ class RsiaPenerimaUndanganController extends Controller
     {
         $this->validate($request, [
             'undangan_id' => 'required|integer|exists:rsia_undangan,id',
-            'penerima'    => 'required|array',
-            'penerima.*'  => 'required|string|exists:pegawai,nik',
+            'penerima'    => 'present|array',
+            'penerima.*'  => 'string|exists:pegawai,nik',
         ]);
 
         $data = $request->all();
@@ -191,10 +191,6 @@ class RsiaPenerimaUndanganController extends Controller
         $penerimaUndangan = \App\Models\RsiaPenerimaUndangan::where('undangan_id', $undangan_id)
             ->with('detail.dep')
             ->get();
-
-        if ($penerimaUndangan->isEmpty()) {
-            return ApiResponse::error('Data not found : Data penerima undangan tidak ditemukan', 'resource_not_found', null, 404);
-        }
 
         return new \App\Http\Resources\Undangan\Penerima\CompleteCollection($penerimaUndangan);
         // return new \App\Http\Resources\Undangan\Penerima\RealCollection($penerimaUndangan);

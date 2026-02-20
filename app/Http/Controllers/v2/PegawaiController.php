@@ -64,6 +64,20 @@ class PegawaiController extends Controller
             ->where('p.stts_aktif', 'AKTIF')
             ->where('pt.kd_jbtn', '<>', '-');
 
+        // Apply Filters
+        if ($request->has('filter.departemen')) {
+            $pegawaiQuery->where('p.departemen', $request->input('filter.departemen'));
+        }
+
+        // Apply Search
+        if ($request->has('search')) {
+            $search = $request->input('search');
+            $pegawaiQuery->where(function($q) use ($search) {
+                $q->where('p.nama', 'like', "%{$search}%")
+                  ->orWhere('p.nik', 'like', "%{$search}%");
+            });
+        }
+
         $limit = $request->query('limit', 50);
         
         // Ensure limit is reasonable (e.g. max 5000 to prevent OOM)

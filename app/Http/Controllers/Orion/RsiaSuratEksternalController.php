@@ -122,6 +122,102 @@ class RsiaSuratEksternalController extends Controller
 
         $this->performFill($request, $e, $suratData);
         $e->save();
+
+        if ($suratData['status'] == 'pengajuan') {
+            $this->sendNotificationToKoordinatorDiklat($request);
+        }
+
+        if ($suratData['status'] == 'disetujui') {
+            $this->sendNotificationToPJ($request, $e->no_surat ?? $suratData['no_surat']);
+        }
+    }
+
+    /**
+     * Send WhatsApp notification to Koordinator Diklat
+     */
+    private function sendNotificationToKoordinatorDiklat(Request $request)
+    {
+        try {
+            $pikRole = \App\Models\RsiaRole::where('nama_role', 'Koordinator Diklat')->first();
+            if (!$pikRole) return;
+
+            $pj = \App\Models\Pegawai::where('nik', $request->pj)->first();
+            $pjName = $pj ? $pj->nama : $request->pj;
+
+            $pics = \App\Models\RsiaUserRole::where('id_role', $pikRole->id_role)
+                ->where('is_active', 1)
+                ->with('petugas')
+                ->get();
+
+            foreach ($pics as $pic) {
+                if ($pic->petugas && $pic->petugas->no_telp) {
+                    $no_telp = $pic->petugas->no_telp;
+                    if (str_starts_with($no_telp, '0')) $no_telp = '62' . substr($no_telp, 1);
+
+                    $msg = "📢 *Pemberitahuan Pengajuan Surat EKSTERNAL*\n\n";
+                    $msg .= "Terdapat pengajuan surat eksternal baru yang memerlukan persetujuan.\n";
+                    $msg .= "------------------------------------\n";
+                    $msg .= "📌 *Perihal* : " . $request->perihal . "\n";
+                    $msg .= "🏠 *Alamat* : " . $request->alamat . "\n";
+                    $msg .= "👤 *PJ/Pengaju* : " . $pjName . "\n";
+                    $msg .= "📅 *Tgl Terbit* : " . \Carbon\Carbon::parse($request->tgl_terbit)->translatedFormat('d F Y') . "\n";
+                    $msg .= "------------------------------------\n";
+                    $msg .= "Mohon segera lakukan pengecekan pada aplikasi RSIAP V2. Terima kasih 🙏";
+
+                    \App\Jobs\SendWhatsApp::dispatch($no_telp, $msg);
+                }
+            }
+        } catch (\Exception $e) {
+            \Log::error('Gagal mengirim notifikasi WA pengajuan surat eksternal: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Send WhatsApp notification to PJ (Penanggung Jawab)
+     */
+    private function sendNotificationToPJ(Request $request, $nomorSurat)
+    {
+        try {
+            $pj = \App\Models\Petugas::where('nip', $request->pj)->first();
+            if (!$pj || !$pj->no_telp) return;
+
+            $no_telp = $pj->no_telp;
+            if (str_starts_with($no_telp, '0')) $no_telp = '62' . substr($no_telp, 1);
+
+            $msg = "📢 *Surat Eksternal Telah Disetujui*\n\n";
+            $msg .= "Pengajuan surat eksternal Anda telah disetujui dan nomor surat telah terbit.\n";
+            $msg .= "------------------------------------\n";
+            $msg .= "📌 *Perihal* : " . $request->perihal . "\n";
+            $msg .= "🔢 *No. Surat* : " . $nomorSurat . "\n";
+            $msg .= "📅 *Tgl Terbit* : " . \Carbon\Carbon::parse($request->tgl_terbit)->translatedFormat('d F Y') . "\n";
+            $msg .= "------------------------------------\n";
+            $msg .= "Silakan cek detailnya pada aplikasi RSIAP V2. Terima kasih 🙏";
+
+            \App\Jobs\SendWhatsApp::dispatch($no_telp, $msg);
+        } catch (\Exception $e) {
+            \Log::error('Gagal mengirim notifikasi WA approval eksternal ke PJ: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Get statistics for external letters.
+     */
+    public function stats(Request $request)
+    {
+        $stats = \App\Models\RsiaSuratEksternal::selectRaw('status, COUNT(*) as count')
+            ->groupBy('status')
+            ->pluck('count', 'status')
+            ->toArray();
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'total' => array_sum($stats),
+                'pengajuan' => $stats['pengajuan'] ?? 0,
+                'disetujui' => $stats['disetujui'] ?? 0,
+                'ditolak' => $stats['ditolak'] ?? 0,
+            ]
+        ]);
     }
 
     /**

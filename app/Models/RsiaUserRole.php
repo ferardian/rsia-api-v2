@@ -37,7 +37,7 @@ class RsiaUserRole extends Model
 
     public function petugas()
     {
-        return $this->belongsTo(RsiaPetugas::class, 'nip', 'nip');
+        return $this->belongsTo(Petugas::class, 'nip', 'nip');
     }
 
     // Scopes

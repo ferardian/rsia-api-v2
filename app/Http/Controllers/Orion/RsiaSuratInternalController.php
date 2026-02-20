@@ -81,6 +81,14 @@ class RsiaSuratInternalController extends \Orion\Http\Controllers\Controller
 
         $this->performFill($request, $entity, $suratData);
         $entity->save();
+
+        if ($suratData['status'] == 'pengajuan') {
+            $this->sendNotificationToKoordinatorDiklat($request);
+        }
+
+        if ($suratData['status'] == 'disetujui') {
+            $this->sendNotificationToPJ($request, $suratData['no_surat']);
+        }
     }
 
     /**
@@ -134,6 +142,95 @@ class RsiaSuratInternalController extends \Orion\Http\Controllers\Controller
 
         $this->performFill($request, $e, $suratData);
         $e->save();
+
+        if ($suratData['status'] == 'pengajuan') {
+            $this->sendNotificationToKoordinatorDiklat($request);
+        }
+
+        if ($suratData['status'] == 'disetujui') {
+            $this->sendNotificationToPJ($request, $e->no_surat ?? $suratData['no_surat']);
+        }
+    }
+
+    /**
+     * Send WhatsApp notification to Koordinator Diklat
+     * 
+     * @param Request $request
+     * @return void
+     */
+    private function sendNotificationToKoordinatorDiklat(Request $request)
+    {
+        try {
+            $pikRole = \App\Models\RsiaRole::where('nama_role', 'Koordinator Diklat')->first();
+            if (!$pikRole) {
+                return;
+            }
+
+            $pj = \App\Models\Pegawai::where('nik', $request->pj)->first();
+            $pjName = $pj ? $pj->nama : $request->pj;
+
+            $pics = \App\Models\RsiaUserRole::where('id_role', $pikRole->id_role)
+                ->where('is_active', 1)
+                ->with('petugas')
+                ->get();
+
+            foreach ($pics as $pic) {
+                if ($pic->petugas && $pic->petugas->no_telp) {
+                    $no_telp = $pic->petugas->no_telp;
+                    if (str_starts_with($no_telp, '0')) {
+                        $no_telp = '62' . substr($no_telp, 1);
+                    }
+
+                    $msg = "📢 *Pemberitahuan Pengajuan Surat*\n\n";
+                    $msg .= "Terdapat pengajuan surat internal baru yang memerlukan persetujuan.\n";
+                    $msg .= "------------------------------------\n";
+                    $msg .= "📌 *Perihal* : " . $request->perihal . "\n";
+                    $msg .= "👤 *PJ/Pengaju* : " . $pjName . "\n";
+                    $msg .= "📅 *Tgl Terbit* : " . \Carbon\Carbon::parse($request->tgl_terbit)->translatedFormat('d F Y') . "\n";
+                    $msg .= "------------------------------------\n";
+                    $msg .= "Mohon segera lakukan pengecekan pada aplikasi RSIAP V2. Terima kasih 🙏";
+
+                    \App\Jobs\SendWhatsApp::dispatch($no_telp, $msg);
+                }
+            }
+        } catch (\Exception $e) {
+            \Log::error('Gagal mengirim notifikasi WA pengajuan surat: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Send WhatsApp notification to PJ (Penanggung Jawab)
+     * 
+     * @param Request $request
+     * @param string $nomorSurat
+     * @return void
+     */
+    private function sendNotificationToPJ(Request $request, $nomorSurat)
+    {
+        try {
+            $pj = \App\Models\Petugas::where('nip', $request->pj)->first();
+            if (!$pj || !$pj->no_telp) {
+                return;
+            }
+
+            $no_telp = $pj->no_telp;
+            if (str_starts_with($no_telp, '0')) {
+                $no_telp = '62' . substr($no_telp, 1);
+            }
+
+            $msg = "📢 *Surat Internal Telah Disetujui*\n\n";
+            $msg .= "Pengajuan surat Anda telah disetujui dan nomor surat telah terbit.\n";
+            $msg .= "------------------------------------\n";
+            $msg .= "📌 *Perihal* : " . $request->perihal . "\n";
+            $msg .= "🔢 *No. Surat* : " . $nomorSurat . "\n";
+            $msg .= "📅 *Tgl Terbit* : " . \Carbon\Carbon::parse($request->tgl_terbit)->translatedFormat('d F Y') . "\n";
+            $msg .= "------------------------------------\n";
+            $msg .= "Silakan cek detailnya pada aplikasi RSIAP V2. Terima kasih 🙏";
+
+            \App\Jobs\SendWhatsApp::dispatch($no_telp, $msg);
+        } catch (\Exception $e) {
+            \Log::error('Gagal mengirim notifikasi WA approval ke PJ: ' . $e->getMessage());
+        }
     }
 
     /**
@@ -283,5 +380,29 @@ class RsiaSuratInternalController extends \Orion\Http\Controllers\Controller
     public function searchableBy(): array
     {
         return ['perihal', 'penanggungJawabSimple.nama', 'no_surat'];
+    }
+
+    /**
+     * Get statistics for internal letters.
+     * 
+     * @param \Illuminate\Http\Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function stats(\Illuminate\Http\Request $request)
+    {
+        $stats = \App\Models\RsiaSuratInternal::selectRaw('status, COUNT(*) as count')
+            ->groupBy('status')
+            ->pluck('count', 'status')
+            ->toArray();
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'total' => array_sum($stats),
+                'pengajuan' => $stats['pengajuan'] ?? 0,
+                'disetujui' => $stats['disetujui'] ?? 0,
+                'ditolak' => $stats['ditolak'] ?? 0,
+            ]
+        ]);
     }
 }
