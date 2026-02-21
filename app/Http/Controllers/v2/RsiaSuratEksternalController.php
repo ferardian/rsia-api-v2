@@ -22,11 +22,18 @@ class RsiaSuratEksternalController extends Controller
         $page = $request->input('page', 1);
         $select = $request->input('select', '*');
 
-        $data = RsiaSuratEksternal::select(array_map('trim', explode(',', $select)))
+        $query = RsiaSuratEksternal::select(array_map('trim', explode(',', $select)))
             ->with(['penanggungJawabSimple' => function ($query) {
                 $query->select('nik', 'nama');
-            }])
-            ->orderBy('created_at', 'desc')
+            }]);
+
+        if ($request->has('departemen') && $request->departemen !== '' && $request->departemen !== '-') {
+            $query->whereHas('penanggungJawab', function ($q) use ($request) {
+                $q->where('departemen', $request->departemen);
+            });
+        }
+
+        $data = $query->orderBy('created_at', 'desc')
             ->paginate(10, array_map('trim', explode(',', $select)), 'page', $page);
 
         return new \App\Http\Resources\Berkas\CompleteCollection($data);

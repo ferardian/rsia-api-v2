@@ -213,6 +213,25 @@ class RsiaSuratMasukController extends Controller
     }
 
     /**
+     * The hook is executed after deleting the resource.
+     *
+     * @param Request $request
+     * @param Model $entity
+     * @return mixed
+     */
+    protected function afterDestroy(Request $request, Model $entity)
+    {
+        $file_name = $entity->berkas;
+
+        if ($file_name) {
+            $storage = new \Illuminate\Support\Facades\Storage();
+            if ($storage::disk('sftp')->exists(env('DOCUMENT_SURAT_MASUK_SAVE_LOCATION') . '/' . $file_name)) {
+                $storage::disk('sftp')->delete(env('DOCUMENT_SURAT_MASUK_SAVE_LOCATION') . '/' . $file_name);
+            }
+        }
+    }
+
+    /**
      * Retrieves currently authenticated user based on the guard.
      *
      * @return \Illuminate\Contracts\Auth\Authenticatable|null

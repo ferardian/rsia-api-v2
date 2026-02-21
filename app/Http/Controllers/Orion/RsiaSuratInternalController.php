@@ -35,8 +35,15 @@ class RsiaSuratInternalController extends \Orion\Http\Controllers\Controller
      */
     protected function buildIndexFetchQuery(Request $request, array $requestedRelations): Builder
     {
-        return parent::buildIndexFetchQuery($request, $requestedRelations)
-            ->orderBy('created_at', 'desc');
+        $query = parent::buildIndexFetchQuery($request, $requestedRelations);
+
+        if ($request->has('departemen') && $request->departemen !== '' && $request->departemen !== '-') {
+            $query->whereHas('penanggungJawab', function ($q) use ($request) {
+                $q->where('departemen', $request->departemen);
+            });
+        }
+
+        return $query->orderBy('created_at', 'desc');
     }
 
     /**
@@ -339,7 +346,7 @@ class RsiaSuratInternalController extends \Orion\Http\Controllers\Controller
      */
     public function filterableBy(): array
     {
-        return ['tgl_terbit', 'tanggal', 'status', 'no_surat', 'pj'];
+        return ['tgl_terbit', 'tanggal', 'status', 'no_surat', 'pj', 'penanggungJawab.departemen'];
     }
 
     /**
@@ -390,8 +397,15 @@ class RsiaSuratInternalController extends \Orion\Http\Controllers\Controller
      */
     public function stats(\Illuminate\Http\Request $request)
     {
-        $stats = \App\Models\RsiaSuratInternal::selectRaw('status, COUNT(*) as count')
-            ->groupBy('status')
+        $query = \App\Models\RsiaSuratInternal::selectRaw('status, COUNT(*) as count');
+
+        if ($request->has('departemen') && $request->departemen !== '' && $request->departemen !== '-') {
+            $query->whereHas('penanggungJawab', function ($q) use ($request) {
+                $q->where('departemen', $request->departemen);
+            });
+        }
+
+        $stats = $query->groupBy('status')
             ->pluck('count', 'status')
             ->toArray();
 

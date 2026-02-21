@@ -31,8 +31,15 @@ class RsiaSuratEksternalController extends Controller
      */
     protected function buildIndexFetchQuery(Request $request, array $requestedRelations): \Illuminate\Database\Eloquent\Builder
     {
-        return parent::buildIndexFetchQuery($request, $requestedRelations)
-            ->orderBy('created_at', 'desc');
+        $query = parent::buildIndexFetchQuery($request, $requestedRelations);
+
+        if ($request->has('departemen') && $request->departemen !== '' && $request->departemen !== '-') {
+            $query->whereHas('penanggungJawab', function ($q) use ($request) {
+                $q->where('departemen', $request->departemen);
+            });
+        }
+
+        return $query->orderBy('created_at', 'desc');
     }
 
     /**
@@ -201,11 +208,21 @@ class RsiaSuratEksternalController extends Controller
 
     /**
      * Get statistics for external letters.
+     * 
+     * @param \Illuminate\Http\Request $request
+     * @return \Illuminate\Http\JsonResponse
      */
     public function stats(Request $request)
     {
-        $stats = \App\Models\RsiaSuratEksternal::selectRaw('status, COUNT(*) as count')
-            ->groupBy('status')
+        $query = \App\Models\RsiaSuratEksternal::selectRaw('status, COUNT(*) as count');
+
+        if ($request->has('departemen') && $request->departemen !== '' && $request->departemen !== '-') {
+            $query->whereHas('penanggungJawab', function ($q) use ($request) {
+                $q->where('departemen', $request->departemen);
+            });
+        }
+
+        $stats = $query->groupBy('status')
             ->pluck('count', 'status')
             ->toArray();
 

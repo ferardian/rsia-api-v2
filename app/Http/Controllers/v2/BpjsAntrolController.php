@@ -327,6 +327,18 @@ class BpjsAntrolController extends Controller
         $referensi = \App\Models\ReferensiMobilejknBpjs::where('nobooking', $kodebooking)->first();
         $no_rawat = $referensi ? $referensi->no_rawat : $kodebooking;
 
+        $reg = \App\Models\RegPeriksa::where('no_rawat', $no_rawat)->first();
+        if (!$reg && $referensi) {
+             $reg = \App\Models\RegPeriksa::where('no_rawat', $kodebooking)->first();
+             if ($reg) $no_rawat = $kodebooking;
+        }
+
+        if (!$reg) {
+            return response()->json([
+                'metadata' => ['code' => 404, 'message' => 'Data Pendaftaran tidak ditemukan untuk booking ini.']
+            ]);
+        }
+
         $pemeriksaan = \App\Models\PemeriksaanRalan::where('no_rawat', $no_rawat)->first();
         $estimasi = \Illuminate\Support\Facades\DB::table('rsia_estimasi_poli')->where('no_rawat', $no_rawat)->first();
         $selesai = \Illuminate\Support\Facades\DB::table('rsia_selesai_poli')->where('no_rawat', $no_rawat)->first();
@@ -335,7 +347,6 @@ class BpjsAntrolController extends Controller
             ->orderBy('no_resep', 'desc')
             ->first();
 
-        $reg = \App\Models\RegPeriksa::where('no_rawat', $no_rawat)->first();
         $nama_pasien = '-';
         if ($reg && $reg->pasien) {
             $nama_pasien = $reg->pasien->nm_pasien;
@@ -444,11 +455,17 @@ class BpjsAntrolController extends Controller
         
         // Get registration data using ReferensiMobilejknBpjs
         $referensi = \App\Models\ReferensiMobilejknBpjs::where('nobooking', $kodebooking)->first();
-        if (!$referensi) {
-            return response()->json(['metadata' => ['code' => 404, 'message' => 'Data antrean tidak ditemukan']]);
+        $no_rawat = $referensi ? $referensi->no_rawat : $kodebooking;
+
+        $reg = \App\Models\RegPeriksa::where('no_rawat', $no_rawat)->first();
+        if (!$reg && $referensi) {
+             $reg = \App\Models\RegPeriksa::where('no_rawat', $kodebooking)->first();
+             if ($reg) $no_rawat = $kodebooking;
         }
 
-        $no_rawat = $referensi->no_rawat;
+        if (!$reg) {
+            return response()->json(['metadata' => ['code' => 404, 'message' => 'Data antrean tidak ditemukan']]);
+        }
         
         // Check if prescription exists
         $hasResep = \App\Models\ResepObat::where('no_rawat', $no_rawat)->exists();
@@ -591,12 +608,18 @@ class BpjsAntrolController extends Controller
 
         foreach ($kodebookings as $kodebooking) {
             $referensi = \App\Models\ReferensiMobilejknBpjs::where('nobooking', $kodebooking)->first();
-            if (!$referensi) {
+            $no_rawat = $referensi ? $referensi->no_rawat : $kodebooking;
+
+            $reg = \App\Models\RegPeriksa::where('no_rawat', $no_rawat)->first();
+            if (!$reg && $referensi) {
+                 $reg = \App\Models\RegPeriksa::where('no_rawat', $kodebooking)->first();
+                 if ($reg) $no_rawat = $kodebooking;
+            }
+
+            if (!$reg) {
                 $results[$kodebooking] = ['status' => 'Data antrean tidak ditemukan'];
                 continue;
             }
-
-            $no_rawat = $referensi->no_rawat;
             $hasResep = \App\Models\ResepObat::where('no_rawat', $no_rawat)->exists();
 
             $patientTasks = [];
