@@ -8,6 +8,10 @@ use App\Models\RsiaCuti;
 use Illuminate\Http\Request;
 
 use App\Traits\LogsToTracker;
+use App\Jobs\SendWhatsApp;
+use App\Models\RsiaMappingJabatan;
+use App\Models\Pegawai;
+use App\Models\Petugas;
 
 class CutiPegawaiController extends Controller
 {
@@ -50,8 +54,8 @@ class CutiPegawaiController extends Controller
     public function store(string $nik, Request $request)
     {
         $request->validate([
-            // tanggal_cuti is object of start and end
-            'tanggal_cuti' => 'required',
+            'tanggal_cuti' => 'required_without:dates',
+            'dates'        => 'required_without:tanggal_cuti|array',
             'jenis'        => 'required|string|in:Cuti Tahunan,Cuti Bersalin,Cuti Diluar Tanggungan,Cuti Besar'
         ]);
 
@@ -68,43 +72,64 @@ class CutiPegawaiController extends Controller
             return ApiResponse::error('Pegawai tidak ditemukan', "resource_not_found", null, 404);
         }
 
-        $data = [
-            'id_pegawai'        => $pegawai->id,
-            'nik'               => $nik,
-            'nama'              => $pegawai->nama,
-            'dep_id'            => $pegawai->departemen,
-            'tanggal_cuti'      => $request->tanggal_cuti['start'],
-            'id_jenis'          => $this->getIdJenisCuti($request->jenis),
-            'jenis'             => $request->jenis,
-            'status'            => 0,
-            'tanggal_pengajuan' => \Carbon\Carbon::now()
-        ];
-
-        $dataCutiBersalin = [];
-        if ($request->jenis == "Cuti Bersalin") {
-            $request->validate([
-                'tanggal_selesai' => 'required|date'
-            ]);
-
-            $dataCutiBersalin = [
-                'tgl_mulai'   => $request->tanggal_cuti['start'],
-                'tgl_selesai' => $request->tanggal_cuti['end'],
-            ];
+        $dates = [];
+        if ($request->has('dates') && is_array($request->dates)) {
+            $dates = $request->dates;
+        } else {
+            // Fallback for range - expand to individual dates if not Cuti Bersalin
+            if ($request->jenis == "Cuti Bersalin") {
+                $dates = [$request->tanggal_cuti['start']];
+            } else {
+                $start = \Carbon\Carbon::parse($request->tanggal_cuti['start']);
+                $end = \Carbon\Carbon::parse($request->tanggal_cuti['end']);
+                while ($start->lte($end)) {
+                    $dates[] = $start->copy()->format('Y-m-d');
+                    $start->addDay();
+                }
+            }
         }
 
         try {
-            \DB::transaction(function () use ($data, $dataCutiBersalin, $request) {
-                $cuti = RsiaCuti::create($data);
+            \DB::transaction(function () use ($nik, $pegawai, $dates, $request) {
+                foreach ($dates as $date) {
+                    $data = [
+                        'id_pegawai'        => $pegawai->id,
+                        'nik'               => $nik,
+                        'nama'              => $pegawai->nama,
+                        'dep_id'            => $pegawai->departemen,
+                        'tanggal_cuti'      => $date,
+                        'id_jenis'          => $this->getIdJenisCuti($request->jenis),
+                        'jenis'             => $request->jenis,
+                        'status'            => 0,
+                        'tanggal_pengajuan' => \Carbon\Carbon::now()
+                    ];
 
-                if ($cuti->jenis == "Cuti Bersalin") {
-                    $dataCutiBersalin['id_cuti'] = $cuti->id_cuti;
+                    $cuti = RsiaCuti::create($data);
 
-                    \App\Models\RsiaCutiBersalin::create($dataCutiBersalin);
+                    if ($request->jenis == "Cuti Bersalin") {
+                        \App\Models\RsiaCutiBersalin::create([
+                            'id_cuti' => $cuti->id_cuti,
+                            'tgl_mulai' => $request->tanggal_cuti['start'],
+                            'tgl_selesai' => $request->tanggal_cuti['end'],
+                        ]);
+                    }
+
+                    $sql = "INSERT INTO rsia_cuti VALUES ('{$data['id_pegawai']}', '{$data['nik']}', '{$data['nama']}', '{$data['dep_id']}', '{$data['tanggal_cuti']}', '{$data['id_jenis']}', '{$data['jenis']}', '{$data['status']}', '{$data['tanggal_pengajuan']}')";
+                    $this->logTracker($sql, $request);
                 }
-
-                $sql = "INSERT INTO rsia_cuti VALUES ('{$data['id_pegawai']}', '{$data['nik']}', '{$data['nama']}', '{$data['dep_id']}', '{$data['tanggal_cuti']}', '{$data['id_jenis']}', '{$data['jenis']}', '{$data['status']}', '{$data['tanggal_pengajuan']}')";
-                $this->logTracker($sql, $request);
             }, 5);
+
+            // Send WA Notification to superiors (Consolidated)
+            $this->sendWhatsAppNotification($nik, [
+                'nama' => $pegawai->nama,
+                'jenis' => $request->jenis,
+                'dates' => $dates,
+                'is_range' => $request->jenis == "Cuti Bersalin",
+                'range' => [
+                    'start' => $request->tanggal_cuti['start'] ?? null,
+                    'end' => $request->tanggal_cuti['end'] ?? null
+                ]
+            ]);
 
             return ApiResponse::success('Cuti berhasil diajukan');
         } catch (\Throwable $th) {
@@ -215,6 +240,11 @@ class CutiPegawaiController extends Controller
             return ApiResponse::error('Pegawai tidak ditemukan', "resource_not_found", null, 404);
         }
 
+        // Only allow coordinators (status_koor = 1) or specific high-level positions to approve
+        if ($pegawai->status_koor == '0' && !in_array($pegawai->jnj_jabatan, ['RS1', 'RS2', 'RS3', 'RS4', 'RS5'])) {
+            return new \App\Http\Resources\RealDataCollection(collect([]));
+        }
+
         // Debug: Log user info
         \Log::info('Approval Cuti - User Info', [
             'nik' => $nik,
@@ -316,6 +346,9 @@ class CutiPegawaiController extends Controller
         $sql = "UPDATE rsia_cuti SET status_cuti='2' WHERE id_cuti='{$id}'";
         $this->logTracker($sql, $request);
 
+        // Send notification to employee
+        $this->sendStatusNotification($id, '2');
+
         return ApiResponse::success('Cuti berhasil disetujui');
     }
 
@@ -356,6 +389,9 @@ class CutiPegawaiController extends Controller
 
         $sql = "UPDATE rsia_cuti SET status_cuti='3' WHERE id_cuti='{$id}'";
         $this->logTracker($sql, $request);
+
+        // Send notification to employee
+        $this->sendStatusNotification($id, '3');
 
         return ApiResponse::success('Cuti berhasil ditolak');
     }
@@ -459,5 +495,109 @@ class CutiPegawaiController extends Controller
         ];
 
         return $jenisCuti[$jenis];
+    }
+
+    /**
+     * Send WhatsApp notification to superiors
+     * 
+     * @param string $nik
+     * @param array $data
+     * @return void
+     * */
+    private function sendWhatsAppNotification(string $nik, array $data)
+    {
+        $pegawai = Pegawai::with('dep')->where('nik', $nik)->first();
+        if (!$pegawai) return;
+
+        // Get mappings for superiors
+        $mappings = RsiaMappingJabatan::where('dep_id_down', $pegawai->departemen)
+            ->where('kd_jabatan_down', $pegawai->jnj_jabatan)
+            ->get();
+
+        if ($mappings->isEmpty()) return;
+
+        // Date formatting logic
+        if ($data['is_range']) {
+            $tglMulai = \Carbon\Carbon::parse($data['range']['start'])->translatedFormat('d F Y');
+            $tglSelesai = \Carbon\Carbon::parse($data['range']['end'])->translatedFormat('d F Y');
+            $tglPengajuan = ($tglMulai == $tglSelesai) ? $tglMulai : "{$tglMulai} s/d {$tglSelesai}";
+        } else {
+            // Handle multiple individual dates
+            $formattedDates = array_map(function($d) {
+                return \Carbon\Carbon::parse($d)->translatedFormat('d F Y');
+            }, $data['dates']);
+            
+            if (count($formattedDates) === 1) {
+                $tglPengajuan = $formattedDates[0];
+            } else {
+                $tglPengajuan = "\n- " . implode("\n- ", $formattedDates);
+            }
+        }
+
+        // Message template
+        $message = "*Notifikasi Pengajuan Cuti*\n\n";
+        $message .= "Nama : *{$data['nama']}*\n";
+        $message .= "NIK : {$nik}\n";
+        $message .= "Unit : {$pegawai->dep->nama}\n";
+        $message .= "Tanggal : {$tglPengajuan}\n";
+        $message .= "Jenis : {$data['jenis']}\n\n";
+        $message .= "Mohon untuk segera ditinjau dan dilakukan persetujuan pada aplikasi RSIAP v2.\n\n";
+        $message .= "*RSIA AISYIYAH PEKAJANGAN*";
+
+        foreach ($mappings as $map) {
+            // Find superiors in this department and position, ensuring they are active coordinators
+            $superiors = Pegawai::where('departemen', $map->dep_id_up)
+                ->where('jnj_jabatan', $map->kd_jabatan_up)
+                ->where('stts_aktif', 'AKTIF')
+                ->where(function ($query) {
+                    // For high level positions, status_koor might not be set, but for mid-management it should be 1
+                    $query->where('status_koor', '1')
+                          ->orWhereIn('jnj_jabatan', ['RS1', 'RS2', 'RS3', 'RS4', 'RS5']);
+                })
+                ->get();
+
+            foreach ($superiors as $sup) {
+                $petugas = Petugas::where('nip', $sup->nik)->first();
+                if ($petugas && $petugas->no_telp) {
+                    SendWhatsApp::dispatchAfterResponse($petugas->no_telp, $message);
+                }
+            }
+        }
+    }
+
+    /**
+     * Send status notification to employee (Approved/Rejected)
+     * 
+     * @param int $id_cuti
+     * @param string $status
+     * @return void
+     * */
+    private function sendStatusNotification(int $id_cuti, string $status)
+    {
+        $cuti = RsiaCuti::where('id_cuti', $id_cuti)->first();
+        if (!$cuti) return;
+
+        $pegawai = Pegawai::where('nik', $cuti->nik)->first();
+        if (!$pegawai) return;
+
+        $petugas = Petugas::where('nip', $pegawai->nik)->first();
+        if (!$petugas || !$petugas->no_telp) return;
+
+        $statusLabel = ($status == '2') ? '*DISETUJUI*' : '*DITOLAK*';
+        $tanggal = \Carbon\Carbon::parse($cuti->tanggal_cuti)->translatedFormat('d F Y');
+
+        $message = "*Notifikasi Status Pengajuan Cuti*\n\n";
+        $message .= "Halo, *{$pegawai->nama}*\n";
+        $message .= "Pengajuan cuti Anda untuk tanggal *{$tanggal}* telah {$statusLabel}.\n\n";
+        
+        if ($status == '2') {
+            $message .= "Selamat beristirahat!\n\n";
+        } else {
+            $message .= "Mohon maaf, pengajuan Anda belum dapat disetujui saat ini.\n\n";
+        }
+
+        $message .= "*RSIA AISYIYAH PEKAJANGAN*";
+
+        SendWhatsApp::dispatchAfterResponse($petugas->no_telp, $message);
     }
 }
