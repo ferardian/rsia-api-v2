@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use App\Models\GoogleReview;
+use App\Jobs\SendWhatsApp;
 use Carbon\Carbon;
 
 class GoogleReviewService
@@ -93,19 +94,36 @@ class GoogleReviewService
                     }
 
                     if (isset($data['result']['reviews'])) {
-                        // Truncate existing reviews
-                        GoogleReview::truncate();
+                        // Check if this is the first time we're fetching (table is empty)
+                        $isFirstFetch = GoogleReview::count() === 0;
 
-                        foreach ($data['result']['reviews'] as $item) {
-                            GoogleReview::create([
-                                'author_name' => $item['author_name'] ?? 'Pengguna Google',
-                                'author_url' => $item['author_url'] ?? '#',
-                                'profile_photo_url' => $item['profile_photo_url'] ?? 'https://ui-avatars.com/api/?name=' . urlencode($item['author_name'] ?? 'User') . '&background=random',
-                                'rating' => $item['rating'] ?? 0,
-                                'relative_time_description' => $item['relative_time_description'] ?? '',
-                                'text' => $item['text'] ?? '',
-                                'time' => $item['time'] ?? time()
-                            ]);
+                        // Sort reviews chronologically (oldest first) so that
+                        // when we notify, we notify in correct order if multiple new reviews exist.
+                        // The Google API usually returns newest first due to 'reviews_sort' = 'newest'.
+                        $reviews = array_reverse($data['result']['reviews']);
+
+                        foreach ($reviews as $item) {
+                            $reviewExists = GoogleReview::where('author_name', $item['author_name'] ?? 'Pengguna Google')
+                                ->where('time', $item['time'] ?? time())
+                                ->exists();
+
+                            if (!$reviewExists) {
+                                // Save to database
+                                GoogleReview::create([
+                                    'author_name' => $item['author_name'] ?? 'Pengguna Google',
+                                    'author_url' => $item['author_url'] ?? '#',
+                                    'profile_photo_url' => $item['profile_photo_url'] ?? 'https://ui-avatars.com/api/?name=' . urlencode($item['author_name'] ?? 'User') . '&background=random',
+                                    'rating' => $item['rating'] ?? 0,
+                                    'relative_time_description' => $item['relative_time_description'] ?? '',
+                                    'text' => $item['text'] ?? '',
+                                    'time' => $item['time'] ?? time()
+                                ]);
+
+                                // Send WA Notification (but skip if this is the initial database population)
+                                if (!$isFirstFetch) {
+                                    $this->sendReviewNotification($item);
+                                }
+                            }
                         }
                     }
                 } else if (isset($data['error_message'])) {
@@ -117,5 +135,38 @@ class GoogleReviewService
         } catch (\Exception $e) {
             Log::error('Google Places Service Exception: ' . $e->getMessage());
         }
+    }
+
+    private function sendReviewNotification($review)
+    {
+        $targetNumber = env('WA_GOOGLE_REVIEW_NOTIFICATION_NUMBER');
+        
+        if (empty($targetNumber)) {
+            Log::warning('Target WA number for Google Review notification is not set.');
+            return;
+        }
+
+        $nama = $review['author_name'] ?? 'Pengguna Google';
+        $rating = $review['rating'] ?? 0;
+        $stars = str_repeat('⭐', $rating);
+        $waktu = $review['relative_time_description'] ?? '';
+        $teks = $review['text'] ?? '';
+        $url = $review['author_url'] ?? 'https://maps.google.com/?cid=' . $this->placeId;
+
+        $message = "*📝 Ulasan Pasien Baru (Google Maps)*\n\n";
+        $message .= "*Nama:* {$nama}\n";
+        $message .= "*Rating:* {$stars} ({$rating}/5)\n";
+        $message .= "*Waktu:* {$waktu}\n\n";
+
+        if (!empty($teks)) {
+            $message .= "*Ulasan:*\n\"{$teks}\"\n\n";
+        } else {
+            $message .= "_(Tanpa teks ulasan)_\n\n";
+        }
+
+        $message .= "Buka Ulasan: {$url}";
+
+        // Dispatch job using the default session defined in config/env
+        SendWhatsApp::dispatch($targetNumber, $message);
     }
 }
