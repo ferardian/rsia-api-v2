@@ -27,10 +27,25 @@ class JadwalTambahanController extends Controller
             ->with('dep:dep_id,nama') // Eager load department name
             ->where('stts_aktif', 'AKTIF');
 
+        $isSuperUser = false;
+        try {
+            if ($request->input('mode') === 'admin') {
+                $isSuperUser = true;
+            }
+            if (!$isSuperUser) {
+                $payload = auth()->payload();
+                $role = $payload->get('role');
+                if (in_array($role, ['admin', 'IT', 'direksi'])) {
+                    $isSuperUser = true;
+                }
+            }
+        } catch (\Exception $e) {}
+
         // Hierarchical Approval Logic
         // Filter employees based on who the current user can approve (Department based only)
         $user = auth()->user();
-        if ($user && $user->detail) {
+        $downstreamDepts = [];
+        if (!$isSuperUser && $user && $user->detail) {
             $approver = $user->detail;
             
             // Get downstream departments where current user's department AND job matches 'UP'
@@ -45,10 +60,6 @@ class JadwalTambahanController extends Controller
             // If user has downstream departments, filter query to show only employees in those departments
             if (!empty($downstreamDepts)) {
                 $query->whereIn('departemen', $downstreamDepts);
-            } else {
-                // If no mapping, user might be admin or isolated. 
-                // Currently strictly enforcing mapping means seeing nothing if no map exists.
-                // But let's leave flexible for now unless requested otherwise.
             }
         }
 
@@ -89,7 +100,14 @@ class JadwalTambahanController extends Controller
 
         // Add authorized departments to response for frontend filter
         $additionalMeta = [];
-        if (!empty($downstreamDepts)) {
+        if ($isSuperUser) {
+             // Admin/IT sees ALL departments
+             $allDepts = DB::table('departemen')
+                ->select('dep_id as id', 'nama as name')
+                ->orderBy('nama')
+                ->get();
+             $additionalMeta['authorized_departments'] = $allDepts;
+        } elseif (!empty($downstreamDepts)) {
             // Fetch names for dropdown
             $deptsWithNames = DB::table('departemen')
                 ->whereIn('dep_id', $downstreamDepts)
@@ -168,9 +186,23 @@ class JadwalTambahanController extends Controller
             $query = RsiaJadwalTambahan::where('bulan', $bulan)
                 ->where('tahun', $tahun);
             
+            $isSuperUser = false;
+            try {
+                if ($request->input('mode') === 'admin') {
+                    $isSuperUser = true;
+                }
+                if (!$isSuperUser) {
+                    $payload = auth()->payload();
+                    $role = $payload->get('role');
+                    if (in_array($role, ['admin', 'IT', 'direksi'])) {
+                        $isSuperUser = true;
+                    }
+                }
+            } catch (\Exception $e) {}
+
             // Hierarchical Approval Logic (Department Based)
             $user = auth()->user();
-            if ($user && $user->detail) {
+            if (!$isSuperUser && $user && $user->detail) {
                 $approver = $user->detail;
                 
                 // Get downstream departments

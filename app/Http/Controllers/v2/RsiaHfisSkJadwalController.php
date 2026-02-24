@@ -63,6 +63,32 @@ class RsiaHfisSkJadwalController extends Controller
             ], 400);
         }
     }
+
+    public function getJadwalDokterHfis(Request $request, $poli, $tanggal)
+    {
+        $antrolService = new \App\Services\BpjsAntrolService();
+        $endpoint = '/jadwaldokter/kodepoli/' . $poli . '/tanggal/' . $tanggal;
+        
+        $response = $antrolService->get($endpoint);
+        
+        // Return structured API response
+        $code = $response['metadata']['code'] ?? 500;
+        
+        if ($code == 200 || $code == 1) {
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Berhasil mengambil jadwal dokter dari HFIS',
+                'data' => $response
+            ]);
+        } else {
+            return response()->json([
+                'status' => 'error',
+                'message' => $response['metadata']['message'] ?? 'Gagal mengambil jadwal dari HFIS',
+                'data' => $response
+            ], 400);
+        }
+    }
+
     public function index(Request $request)
     {
         $query = RsiaHfisSkJadwal::with([

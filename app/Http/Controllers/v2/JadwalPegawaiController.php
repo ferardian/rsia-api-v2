@@ -61,23 +61,38 @@ class JadwalPegawaiController extends Controller
         $downstreamDepts = [];
         
         if ($user && $user->detail) {
-            // Only apply hierarchy if NOT super user
-            if (!$isSuperUser) {
-                $approver = $user->detail;
-                
-                // Get downstream departments where current user's department AND job matches 'UP'
-                $downstreamDepts = DB::table('rsia_mapping_jabatan')
-                    ->where('dep_id_up', $approver->departemen)
-                    ->where('kd_jabatan_up', $approver->jnj_jabatan)
-                    ->pluck('dep_id_down')
-                    ->unique()
-                    ->values()
-                    ->toArray();
-                
-                // If user has downstream departments, filter query to show only employees in those departments
-                if (!empty($downstreamDepts)) {
-                    $query->whereIn('departemen', $downstreamDepts);
-                } 
+            $approver = $user->detail;
+            
+            // Get downstream departments
+            $downstreamDepts = DB::table('rsia_mapping_jabatan')
+                ->where('dep_id_up', $approver->departemen)
+                ->where('kd_jabatan_up', $approver->jnj_jabatan)
+                ->pluck('dep_id_down')
+                ->unique()
+                ->values()
+                ->toArray();
+            
+            // Check if user is strictly Admin or IT (they see everything)
+            $isAdminIT = false;
+            try {
+                $payload = auth()->payload();
+                if (in_array($payload->get('role'), ['admin', 'IT'])) {
+                    $isAdminIT = true;
+                }
+            } catch (\Exception $e) {}
+
+            // If mapping exists and user is NOT Admin/IT, apply the mapping.
+            // This takes precedence over 'direksi' role being a superuser.
+            if (!$isAdminIT && !empty($downstreamDepts)) {
+                $query->whereIn('departemen', $downstreamDepts);
+                $isSuperUser = false; // Restricted view
+            } elseif (!$isAdminIT && ($approver->status_koor == '1' || str_contains(strtolower($approver->jbtn), 'koordinator') || str_contains(strtolower($approver->jbtn), 'kepala'))) {
+                // Fallback: If no mapping but is a Coordinator/Head (identified by status_koor or title), show their own department
+                $query->where('departemen', $approver->departemen);
+                $isSuperUser = false;
+            } elseif (!$isSuperUser) {
+                // Fail-safe: Non-superusers with no mappings see no data (matches Cuti)
+                $query->whereRaw('1 = 0');
             }
         }
 
@@ -236,9 +251,23 @@ class JadwalPegawaiController extends Controller
             $query = RsiaJadwalPegawai::where('bulan', $bulan)
                 ->where('tahun', $tahun);
             
+            $isSuperUser = false;
+            try {
+                if ($request->input('mode') === 'admin') {
+                    $isSuperUser = true;
+                }
+                if (!$isSuperUser) {
+                    $payload = auth()->payload();
+                    $role = $payload->get('role');
+                    if (in_array($role, ['admin', 'IT', 'direksi'])) {
+                        $isSuperUser = true;
+                    }
+                }
+            } catch (\Exception $e) {}
+
             // Hierarchical Approval Logic (Department Based)
             $user = auth()->user();
-            if ($user && $user->detail) {
+            if (!$isSuperUser && $user && $user->detail) {
                 $approver = $user->detail;
                 
                 // Get downstream departments

@@ -126,7 +126,9 @@ class RsiaUndanganController extends Controller
             'default_font' => 'new_times',
         ]);
 
-        return $pdf->stream('undangan_' . \Str::slug($undangan->perihal) . '.pdf');
+        return response($pdf->output(), 200)
+            ->header('Content-Type', 'application/pdf')
+            ->header('Content-Disposition', 'inline; filename="undangan_' . \Str::slug($undangan->perihal) . '.pdf"');
 
         // $noSurat = null;
         // try {
@@ -248,7 +250,9 @@ class RsiaUndanganController extends Controller
             'penerima' => $penerima,
         ]);
 
-        return $pdf->stream('proof-kehadiran-' . \Hash::make($id) .'.pdf');
+        return response($pdf->output(), 200)
+            ->header('Content-Type', 'application/pdf')
+            ->header('Content-Disposition', 'inline; filename="proof-kehadiran-' . \Hash::make($id) .'.pdf"');
     }
     
     /**

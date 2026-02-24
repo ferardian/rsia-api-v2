@@ -103,7 +103,7 @@ class RsiaUndanganController extends Controller
      */
     public function alwaysIncludes(): array
     {
-        return [];
+        return ['penanggungJawab'];
     }
 
     /**

@@ -34,6 +34,13 @@ Route::middleware(['auth:aes', 'claim:role,pegawai|dokter|IT|admin|direksi'])->p
     Route::post('pegawai/update-email', [PegawaiController::class, 'updateEmail']);
     Route::post('pegawai/update-profile', [PegawaiController::class, 'updateProfile']);
     Route::apiResource('pegawai', PegawaiController::class);
+    
+    // Berkas Pegawai (Legacy Parity)
+    Route::post('pegawai/get/berkas', [\App\Http\Controllers\v2\BerkasPegawaiController::class, 'getBerkas']);
+    Route::get('pegawai/berkas/kategori', [\App\Http\Controllers\v2\BerkasPegawaiController::class, 'getBerkasKategori']);
+    Route::get('pegawai/berkas/nama-berkas', [\App\Http\Controllers\v2\BerkasPegawaiController::class, 'getNamaBerkas']);
+    Route::post('pegawai/upload/berkas', [\App\Http\Controllers\v2\BerkasPegawaiController::class, 'uploadBerkas']);
+    Route::post('pegawai/delete/berkas', [\App\Http\Controllers\v2\BerkasPegawaiController::class, 'deleteBerkas']);
 
     // Dokter (Doctor) Routes - search must come before resource
     Route::get('dokter/spesialisasi', [DokterController::class, 'getSpesialisasi']);

@@ -65,6 +65,18 @@ return [
             'timeout'  => env('SFTP_TIMEOUT', 60),
         ],
 
+        'sftp_pegawai' => [
+            'driver'   => 'sftp',
+            'host'     => env('SFTP_PEGAWAI_HOST', env('SFTP_HOST')),
+            'username' => env('SFTP_USERNAME'),
+            'password' => env('SFTP_PASSWORD'),
+            'port'     => env('SFTP_PORT', 22),
+            'root'     => env('SFTP_ROOT', '/var/www/html'),
+            'passive'  => env('SFTP_PASSIVE', true),
+            'ssl'      => env('SFTP_SSL', true),
+            'timeout'  => env('SFTP_TIMEOUT', 60),
+        ],
+
     ],
 
     /*

@@ -36,6 +36,7 @@ class PegawaiController extends Controller
             ->leftJoin('rsia_email_pegawai as rep', 'rep.nik', '=', 'p.nik')
             ->leftJoin('rsia_nomor_kartu_pegawai as rnk', 'rnk.nip', '=', 'p.nik') // Added
             ->leftJoin('departemen as d', 'd.dep_id', '=', 'p.departemen')
+            ->leftJoin('rsia_keluarga_pegawai as rkp', 'rkp.nik', '=', 'p.nik') // Added for family count
             ->select([
                 'p.nik as id_user',
                 'p.nik',
@@ -56,8 +57,9 @@ class PegawaiController extends Controller
                 'p.mulai_kerja',
                 'p.stts_aktif',
                 'p.photo',
-                \DB::raw('GROUP_CONCAT(r.id_role SEPARATOR ",") as id_role'),
-                \DB::raw('GROUP_CONCAT(r.nama_role SEPARATOR ", ") as nama_role')
+                \DB::raw('COUNT(DISTINCT rkp.no_ktp) as jml_keluarga'), // Added
+                \DB::raw('GROUP_CONCAT(DISTINCT r.id_role SEPARATOR ",") as id_role'),
+                \DB::raw('GROUP_CONCAT(DISTINCT r.nama_role SEPARATOR ", ") as nama_role')
             ])
             ->groupBy('p.nik', 'p.nama', 'p.jk', 'p.tmp_lahir', 'p.tgl_lahir', 'p.alamat', 'p.pendidikan', 'p.no_ktp', 'rnk.no_bpjs', 'rnk.no_bpjstk', 'pt.no_telp', 'rep.email', 'p.jbtn', 'p.departemen', 'd.nama', 'p.mulai_kerja', 'p.stts_aktif', 'p.photo')
             ->orderBy('p.nama', 'asc')
@@ -94,6 +96,7 @@ class PegawaiController extends Controller
 
             $transformedData[] = [
                 'id_user' => $item->id_user,
+                'nik' => $item->nik,
                 'nip' => $item->nik,
                 'nama' => $item->nama,
                 'jk' => $item->jk,
@@ -113,6 +116,7 @@ class PegawaiController extends Controller
                 'jbtn' => $item->jbtn,
                 'departemen' => $item->nama_departemen ?? $item->departemen, // Use Name OR Code as fallback
                 'mulai_kerja' => $item->mulai_kerja,
+                'jml_keluarga' => $item->jml_keluarga ?? 0, // Added
                 'photo' => $item->photo,
                 'created_at' => null, // created_at doesn't exist in pegawai table
                 'updated_at' => null, // updated_at doesn't exist in pegawai table
@@ -565,6 +569,7 @@ class PegawaiController extends Controller
                 ->leftJoin('rsia_role as r', 'ur.id_role', '=', 'r.id_role')
                 ->leftJoin('departemen as d', 'd.dep_id', '=', 'p.departemen')
                 ->leftJoin('rsia_nomor_kartu_pegawai as rnk', 'rnk.nip', '=', 'p.nik') // Added
+                ->leftJoin('rsia_keluarga_pegawai as rkp', 'rkp.nik', '=', 'p.nik') // Added for family count
                 ->where('p.stts_aktif', 'AKTIF')
                 ->where('pt.kd_jbtn', '<>', '-')
                 ->where(function($q) use ($query) {
@@ -592,8 +597,9 @@ class PegawaiController extends Controller
                     'p.mulai_kerja',
                     'p.stts_aktif',
                     'p.photo',
-                    \DB::raw('GROUP_CONCAT(r.id_role SEPARATOR ",") as id_role'),
-                    \DB::raw('GROUP_CONCAT(r.nama_role SEPARATOR ", ") as nama_role')
+                    \DB::raw('COUNT(DISTINCT rkp.no_ktp) as jml_keluarga'), // Added
+                    \DB::raw('GROUP_CONCAT(DISTINCT r.id_role SEPARATOR ",") as id_role'),
+                    \DB::raw('GROUP_CONCAT(DISTINCT r.nama_role SEPARATOR ", ") as nama_role')
                 ])
                 ->groupBy('p.nik', 'p.nama', 'p.jk', 'p.tmp_lahir', 'p.tgl_lahir', 'p.alamat', 'p.pendidikan', 'p.no_ktp', 'rnk.no_bpjs', 'rnk.no_bpjstk', 'pt.no_telp', 'p.jbtn', 'p.departemen', 'd.nama', 'p.mulai_kerja', 'p.stts_aktif', 'p.photo')
                 ->limit($limit)
@@ -627,6 +633,7 @@ class PegawaiController extends Controller
                     'jbtn' => $item->jbtn,
                     'departemen' => $item->nama_departemen ?? $item->departemen,
                     'mulai_kerja' => $item->mulai_kerja,
+                    'jml_keluarga' => $item->jml_keluarga ?? 0, // Added
                     'photo' => $item->photo,
                     'created_at' => null,
                     'updated_at' => null,
