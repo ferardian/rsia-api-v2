@@ -9,6 +9,9 @@ use App\Models\Pegawai;
 use App\Models\JadwalPegawai;     // Final Table
 use App\Models\RsiaJadwalPegawai; // Draft/Submission Table
 use App\Models\JamMasuk;
+use App\Models\RsiaMappingJabatan;
+use App\Models\Petugas;
+use App\Jobs\SendWhatsApp;
 use Illuminate\Support\Facades\DB;
 
 class JadwalPegawaiController extends Controller
@@ -225,10 +228,74 @@ class JadwalPegawaiController extends Controller
                 $draft->save();
             }
             DB::commit();
+
+            // Trigger WhatsApp Notification
+            $user = auth()->user();
+            if ($user && $user->detail) {
+                // Determine if this user is submitting for their own department
+                $this->sendScheduleSubmissionNotification($bulanRaw, $tahun, $user->detail);
+            }
+
             return ApiResponse::success('Pengajuan jadwal berhasil disimpan (Draft)');
         } catch (\Exception $e) {
             DB::rollBack();
             return ApiResponse::error('Gagal menyimpan pengajuan: ' . $e->getMessage(), 'save_error', null, 500);
+        }
+    }
+
+    /**
+     * Send WhatsApp notification to superiors upon schedule submission
+     * 
+     * @param string $bulan
+     * @param string $tahun
+     * @param \App\Models\Pegawai $pengajuIn
+     * @return void
+     * */
+    private function sendScheduleSubmissionNotification($bulan, $tahun, $pengajuIn)
+    {
+        $pengaju = Pegawai::with('dep')->where('nik', $pengajuIn->nik)->first();
+        if (!$pengaju) return;
+
+        // Get mappings for superiors
+        $mappings = RsiaMappingJabatan::where('dep_id_down', $pengaju->departemen)
+            ->where('kd_jabatan_down', $pengaju->jnj_jabatan)
+            ->get();
+
+        if ($mappings->isEmpty()) return;
+
+        // Month names
+        $months = [
+            1 => 'Januari', 2 => 'Februari', 3 => 'Maret', 4 => 'April',
+            5 => 'Mei', 6 => 'Juni', 7 => 'Juli', 8 => 'Agustus',
+            9 => 'September', 10 => 'Oktober', 11 => 'November', 12 => 'Desember'
+        ];
+        $namaBulan = $months[(int)$bulan] ?? $bulan;
+        $namaDept = $pengaju->dep->nama ?? $pengaju->departemen;
+
+        $message = "*Notifikasi Pengajuan Jadwal*\n\n";
+        $message .= "Pengajuan jadwal kerja untuk\n";
+        $message .= "Bulan : *{$namaBulan} {$tahun}*\n";
+        $message .= "Unit : *{$namaDept}*\n\n";
+        $message .= "Telah diajukan oleh *{$pengaju->nama}*. Mohon untuk segera ditinjau dan disetujui melalui aplikasi RSIAP v2.\n\n";
+        $message .= "*RSIA AISYIYAH PEKAJANGAN*";
+
+        foreach ($mappings as $map) {
+            // Find superiors in this department and position, ensuring they are active coordinators
+            $superiors = Pegawai::where('departemen', $map->dep_id_up)
+                ->where('jnj_jabatan', $map->kd_jabatan_up)
+                ->where('stts_aktif', 'AKTIF')
+                ->where(function ($query) {
+                    $query->where('status_koor', '1')
+                          ->orWhereIn('jnj_jabatan', ['RS1', 'RS2', 'RS3', 'RS4', 'RS5']);
+                })
+                ->get();
+
+            foreach ($superiors as $sup) {
+                $petugas = Petugas::where('nip', $sup->nik)->first();
+                if ($petugas && $petugas->no_telp) {
+                    SendWhatsApp::dispatchAfterResponse($petugas->no_telp, $message);
+                }
+            }
         }
     }
 
