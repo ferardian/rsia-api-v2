@@ -38,8 +38,8 @@ class RsiaSuratInternalController extends \Orion\Http\Controllers\Controller
         $query = parent::buildIndexFetchQuery($request, $requestedRelations);
 
         if ($request->has('departemen') && $request->departemen !== '' && $request->departemen !== '-') {
-            $query->whereHas('penanggungJawab', function ($q) use ($request) {
-                $q->where('departemen', $request->departemen);
+            $query->whereHas('penanggungJawab.dep', function ($q) use ($request) {
+                $q->where('nama', $request->departemen)->orWhere('dep_id', $request->departemen);
             });
         }
 
