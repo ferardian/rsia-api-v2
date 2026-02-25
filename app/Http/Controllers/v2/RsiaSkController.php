@@ -94,13 +94,10 @@ class RsiaSkController extends Controller
                 if ($file) {
                     $st = new Storage();
 
-                    if (!$st::disk('sftp')->exists(env('DOCUMENT_SK_SAVE_LOCATION'))) {
-                        \App\Helpers\Logger\RSIALogger::berkas("DIRECTORY NOT FOUND :: CREATING : " . env('DOCUMENT_SK_SAVE_LOCATION'), 'info');
-                        $st::disk('sftp')->makeDirectory(env('DOCUMENT_SK_SAVE_LOCATION'));
-                    }
+
 
                     \App\Helpers\Logger\RSIALogger::berkas("UPLOADED", 'info', ['file_name' => $file_name, 'file_size' => $file->getSize(), 'data' => $request->all()]);
-                    $st::disk('sftp')->put(env('DOCUMENT_SK_SAVE_LOCATION') . $file_name, file_get_contents($file));
+                    $st::disk('sftp_pegawai')->put(env('DOCUMENT_SK_SAVE_LOCATION') . $file_name, file_get_contents($file));
                 }
             });
         } catch (\Exception $e) {
@@ -230,16 +227,13 @@ class RsiaSkController extends Controller
                 if ($file) {
                     $st = new Storage();
 
-                    if (!$st::disk('sftp')->exists(env('DOCUMENT_SK_SAVE_LOCATION'))) {
-                        \App\Helpers\Logger\RSIALogger::berkas("DIRECTORY NOT FOUND :: CREATING : " . env('DOCUMENT_SK_SAVE_LOCATION'), 'info');
-                        $st::disk('sftp')->makeDirectory(env('DOCUMENT_SK_SAVE_LOCATION'));
-                    }
 
-                    $st::disk('sftp')->put(env('DOCUMENT_SK_SAVE_LOCATION') . $file_name, file_get_contents($file));
 
-                    if ($oldFile && $oldFile != '' && $st::disk('sftp')->exists(env('DOCUMENT_SK_SAVE_LOCATION') . $oldFile)) {
+                    $st::disk('sftp_pegawai')->put(env('DOCUMENT_SK_SAVE_LOCATION') . $file_name, file_get_contents($file));
+
+                    if ($oldFile && $oldFile != '' && $st::disk('sftp_pegawai')->exists(env('DOCUMENT_SK_SAVE_LOCATION') . $oldFile)) {
                         \App\Helpers\Logger\RSIALogger::berkas("DELETING OLD FILE", 'info', ['file_name' => $oldFile]);
-                        $st::disk('sftp')->delete(env('DOCUMENT_SK_SAVE_LOCATION') . $oldFile);
+                        $st::disk('sftp_pegawai')->delete(env('DOCUMENT_SK_SAVE_LOCATION') . $oldFile);
                     }
                     
                     $data->update(['berkas' => $file_name]);
@@ -289,9 +283,9 @@ class RsiaSkController extends Controller
         }
         
         $st = new Storage();
-        if ($data->berkas && $data->berkas != '' && $st::disk('sftp')->exists(env('DOCUMENT_SK_SAVE_LOCATION') . $data->berkas)) {
+        if ($data->berkas && $data->berkas != '' && $st::disk('sftp_pegawai')->exists(env('DOCUMENT_SK_SAVE_LOCATION') . $data->berkas)) {
             \App\Helpers\Logger\RSIALogger::berkas("DELETING FILE", 'info', ['file_name' => $data->berkas]);
-            $st::disk('sftp')->delete(env('DOCUMENT_SK_SAVE_LOCATION') . $data->berkas);
+            $st::disk('sftp_pegawai')->delete(env('DOCUMENT_SK_SAVE_LOCATION') . $data->berkas);
         }
         
         \App\Helpers\Logger\RSIALogger::berkas("DELETED", 'info', ['data' => $data]);
