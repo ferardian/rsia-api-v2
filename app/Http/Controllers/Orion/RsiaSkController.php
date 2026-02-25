@@ -31,7 +31,7 @@ class RsiaSkController extends Controller
      */
     public function filterableBy(): array
     {
-        return ['tgl_terbit', 'status', 'created_at', 'jenis'];
+        return ['tgl_terbit', 'status', 'status_approval', 'created_at', 'jenis', 'judul'];
     }
 
     /**

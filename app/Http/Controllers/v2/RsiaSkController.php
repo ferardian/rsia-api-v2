@@ -8,6 +8,7 @@ use App\Helpers\ApiResponse;
 use Illuminate\Support\Facades\DB;
 use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\Storage;
+use App\Jobs\SendWhatsApp;
 
 class RsiaSkController extends Controller
 {
@@ -21,11 +22,16 @@ class RsiaSkController extends Controller
         $page = $request->input('page', 1);
         $select = $request->input('select', '*');
 
-        $data = RsiaSk::select(array_map('trim', explode(',', $select)))
-            ->with(['penanggungJawab' => function ($query) {
-                $query->select('nik', 'nama');
-            }])
-            ->orderBy('created_at', 'desc')
+        $query = RsiaSk::select(array_map('trim', explode(',', $select)))
+            ->with(['penanggungJawab' => function ($q) {
+                $q->select('nik', 'nama');
+            }]);
+
+        if ($request->has('status_approval')) {
+            $query->where('status_approval', $request->input('status_approval'));
+        }
+
+        $data = $query->orderBy('created_at', 'desc')
             ->paginate(10, array_map('trim', explode(',', $select)), 'page', $page);
 
         return new \App\Http\Resources\Berkas\CompleteCollection($data);
@@ -54,11 +60,18 @@ class RsiaSkController extends Controller
             'judul'      => 'required|string',
             'pj'         => 'required|exists:pegawai,nik',
             'tgl_terbit' => 'required|date',
-            'file'       => 'file|mimes:pdf,doc,docx,jpg,jpeg,png|max:102400',
+            'file'       => 'nullable|file|mimes:pdf,doc,docx,jpg,jpeg,png|max:102400',
+            'status_approval' => 'nullable|in:pengajuan,disetujui,ditolak',
         ]);
 
         $file = $request->file('file');
-        $file_name = $file ? strtotime(now()) . '-' . str_replace(' ', '_', $file->getClientOriginalName()) : '';
+        $file_name = '';
+        if ($file) {
+            $extension = $file->getClientOriginalExtension();
+            $prefix = str_replace(' ', '_', $request->prefix ?? 'SK-RSIA');
+            $judul = str_replace([' ', '/', '\\'], '_', $request->judul);
+            $file_name = strtotime(now()) . '-' . $prefix . '_' . $judul . '.' . $extension;
+        }
 
         try {
             DB::transaction(function () use ($request, $file, $file_name) {
@@ -93,6 +106,24 @@ class RsiaSkController extends Controller
         } catch (\Exception $e) {
             \App\Helpers\Logger\RSIALogger::berkas("STORE FAILED", 'error', ['data' => $request->all(), 'error' => $e->getMessage()]);
             return ApiResponse::error('failed to save data', 'store_failed', $e->getMessage(), 500);
+        }
+
+        if ($request->status_approval === 'pengajuan') {
+            $rsiaRole = \App\Models\RsiaRole::where('nama_role', 'Koordinator Diklat')->first();
+            $koorDiklat = $rsiaRole ? \App\Models\RsiaUserRole::where('id_role', $rsiaRole->id_role)->where('is_active', 1)->with('petugas')->first() : null;
+            $adminPhone = $koorDiklat && $koorDiklat->petugas ? $koorDiklat->petugas->no_telp : null;
+            
+            if ($adminPhone) {
+                $pjNama = \App\Models\Pegawai::where('nik', $request->pj)->value('nama') ?? $request->pj;
+                $waMessage = "🚨 *PENGAJUAN NOMOR SPK RKK* 🚨\n\n"
+                    . "Terdapat pengajuan Nomor SPK RKK baru yang menunggu persetujuan:\n\n"
+                    . "Perihal: *" . $request->judul . "*\n"
+                    . "Tgl. Terbit: " . \Carbon\Carbon::parse($request->tgl_terbit)->translatedFormat('d F Y') . "\n"
+                    . "Penanggung Jawab: " . $pjNama . "\n\n"
+                    . "Silakan cek di menu Persetujuan Nomor Surat pada RSIAP v2.";
+
+                SendWhatsApp::dispatchAfterResponse($adminPhone, $waMessage);
+            }
         }
 
         \App\Helpers\Logger\RSIALogger::berkas("STORED", 'info', ['data' => $request->all()]);
@@ -175,7 +206,15 @@ class RsiaSkController extends Controller
         $oldData   = $data->toArray();
         $oldFile   = $data->berkas;
         $file      = $request->file('file');
-        $file_name = $file ? strtotime(now()) . '-' . str_replace(' ', '_', $file->getClientOriginalName()) : $data->berkas;
+        
+        $file_name = $data->berkas;
+        if ($file) {
+            $extension = $file->getClientOriginalExtension();
+            $prefix = str_replace(' ', '_', $data->prefix);
+            $judul = str_replace([' ', '/', '\\'], '_', $data->judul);
+            // Example format: 1770774101-SPK_RKK_dr._Naily_Mei_Rina_Wati.pdf
+            $file_name = strtotime(now()) . '-' . $prefix . '_' . $judul . '.' . $extension;
+        }
 
         $request->merge([
             'berkas' => $file_name,
@@ -257,5 +296,53 @@ class RsiaSkController extends Controller
         
         \App\Helpers\Logger\RSIALogger::berkas("DELETED", 'info', ['data' => $data]);
         return ApiResponse::success('data deleted successfully');
+    }
+
+    /**
+     * Approve a Kredensial request.
+     *
+     * @param  string  $identifier
+     * @return \Illuminate\Http\Response
+     */
+    public function approve_kredensial($identifier)
+    {
+        if (!base64_decode($identifier, true)) {
+            return ApiResponse::error("Invalid parameter", "params_invalid", null, 400);
+        }
+
+        $decodedId = base64_decode($identifier);
+        [$nomor, $jenis, $tgl_terbit] = explode('.', $decodedId);
+
+        $data = RsiaSk::where('nomor', $nomor)
+            ->where('jenis', $jenis)
+            ->whereDate('tgl_terbit', $tgl_terbit)
+            ->first();
+
+        if (!$data) {
+            return ApiResponse::error('data not found', 'resource_not_found', 404);
+        }
+
+        try {
+            DB::transaction(function () use ($data) {
+                $data->update(['status_approval' => 'disetujui']);
+            });
+
+            // Send WA Notification to Penanggung Jawab
+            $pjPegawai = \App\Models\Pegawai::where('nik', $data->pj)->with('petugas')->first();
+            $pjPhone = $pjPegawai && $pjPegawai->petugas ? $pjPegawai->petugas->no_telp : null;
+            
+            if ($pjPhone) {
+                $waMessage = "✅ *PENGAJUAN NOMOR SPK RKK DISETUJUI* ✅\n\n"
+                    . "Pengajuan Nomor SPK RKK Anda dengan perihal *" . $data->judul . "* telah disetujui.\n\n"
+                    . "Silakan cek selengkapnya di menu Dokumen / Komite pada RSIAP v2.";
+
+                \App\Jobs\SendWhatsApp::dispatchAfterResponse($pjPhone, $waMessage);
+            }
+            
+        } catch (\Exception $e) {
+            return ApiResponse::error('failed to approve data', 'update_failed', $e->getMessage(), 500);
+        }
+
+        return ApiResponse::success('data approved successfully');
     }
 }

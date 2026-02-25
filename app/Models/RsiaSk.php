@@ -18,6 +18,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
  * @property string $tgl_terbit
  * @property string $berkas
  * @property string $status
+ * @property string $status_approval
  * @property string $created_at
  * @property-read \App\Models\Pegawai $penanggungJawab
  * @method static \Illuminate\Database\Eloquent\Builder|RsiaSk newModelQuery()

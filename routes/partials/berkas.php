@@ -30,10 +30,11 @@ Route::middleware(['auth:aes', 'claim:role,pegawai'])->prefix('berkas')->group(f
     ->parameters(['pks' => 'base64_nomor_tgl_terbit']);
   
   
-    // ==================== BERKAS SK
+  // ==================== BERKAS SK
   Orion::resource('sk', \App\Http\Controllers\Orion\RsiaSkController::class)->only('search');
   Route::apiResource('sk', \App\Http\Controllers\v2\RsiaSkController::class)
     ->parameters(['sk' => 'base64_nomor_tgl_terbit']);
+  Route::post('sk/{sk}/approve-kredensial', [\App\Http\Controllers\v2\RsiaSkController::class, 'approve_kredensial']);
   
   
   // ==================== BERKAS IHT
