@@ -346,7 +346,7 @@ class RsiaSuratInternalController extends \Orion\Http\Controllers\Controller
      */
     public function filterableBy(): array
     {
-        return ['tgl_terbit', 'tanggal', 'status', 'no_surat', 'pj', 'penanggungJawab.departemen'];
+        return ['tgl_terbit', 'tanggal', 'status', 'no_surat', 'pj', 'created_at', 'penanggungJawab.departemen'];
     }
 
     /**
@@ -376,7 +376,7 @@ class RsiaSuratInternalController extends \Orion\Http\Controllers\Controller
      */
     public function includes(): array
     {
-        return ['penerimaUndangan', 'diajukanOleh', 'undangan'];
+        return ['penerimaUndangan', 'diajukanOleh', 'undangan', 'penanggungJawabSimple', 'penerima'];
     }
 
     /**
@@ -388,7 +388,6 @@ class RsiaSuratInternalController extends \Orion\Http\Controllers\Controller
     {
         return ['perihal', 'penanggungJawabSimple.nama', 'no_surat'];
     }
-
     /**
      * Get statistics for internal letters.
      * 
