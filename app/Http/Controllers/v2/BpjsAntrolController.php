@@ -242,7 +242,18 @@ class BpjsAntrolController extends Controller
         if (!$reg && $referensi) {
              // maybe it's already no_rawat
              $reg = \App\Models\RegPeriksa::where('no_rawat', $kodebooking)->first();
-             if ($reg) $no_rawat = $kodebooking;
+             if ($reg) {
+                 $no_rawat = $kodebooking;
+             } else if (!empty($referensi->norm) && !empty($referensi->tanggalperiksa)) {
+                 // Fallback logic
+                 $reg = \App\Models\RegPeriksa::where('no_rkm_medis', $referensi->norm)
+                     ->where('tgl_registrasi', $referensi->tanggalperiksa)
+                     ->orderBy('jam_reg', 'desc')
+                     ->first();
+                 if ($reg) {
+                     $no_rawat = $reg->no_rawat;
+                 }
+             }
         }
 
         if (!$reg) {
@@ -330,7 +341,18 @@ class BpjsAntrolController extends Controller
         $reg = \App\Models\RegPeriksa::where('no_rawat', $no_rawat)->first();
         if (!$reg && $referensi) {
              $reg = \App\Models\RegPeriksa::where('no_rawat', $kodebooking)->first();
-             if ($reg) $no_rawat = $kodebooking;
+             if ($reg) {
+                 $no_rawat = $kodebooking;
+             } else if (!empty($referensi->norm) && !empty($referensi->tanggalperiksa)) {
+                 // Fallback: search by norm (Medical Record) and date
+                 $reg = \App\Models\RegPeriksa::where('no_rkm_medis', $referensi->norm)
+                     ->where('tgl_registrasi', $referensi->tanggalperiksa)
+                     ->orderBy('jam_reg', 'desc')
+                     ->first();
+                 if ($reg) {
+                     $no_rawat = $reg->no_rawat; // Overwrite to correctly mapped registration
+                 }
+             }
         }
 
         if (!$reg) {
@@ -460,7 +482,17 @@ class BpjsAntrolController extends Controller
         $reg = \App\Models\RegPeriksa::where('no_rawat', $no_rawat)->first();
         if (!$reg && $referensi) {
              $reg = \App\Models\RegPeriksa::where('no_rawat', $kodebooking)->first();
-             if ($reg) $no_rawat = $kodebooking;
+             if ($reg) {
+                 $no_rawat = $kodebooking;
+             } else if (!empty($referensi->norm) && !empty($referensi->tanggalperiksa)) {
+                 $reg = \App\Models\RegPeriksa::where('no_rkm_medis', $referensi->norm)
+                     ->where('tgl_registrasi', $referensi->tanggalperiksa)
+                     ->orderBy('jam_reg', 'desc')
+                     ->first();
+                 if ($reg) {
+                     $no_rawat = $reg->no_rawat;
+                 }
+             }
         }
 
         if (!$reg) {
@@ -613,7 +645,17 @@ class BpjsAntrolController extends Controller
             $reg = \App\Models\RegPeriksa::where('no_rawat', $no_rawat)->first();
             if (!$reg && $referensi) {
                  $reg = \App\Models\RegPeriksa::where('no_rawat', $kodebooking)->first();
-                 if ($reg) $no_rawat = $kodebooking;
+                 if ($reg) {
+                     $no_rawat = $kodebooking;
+                 } else if (!empty($referensi->norm) && !empty($referensi->tanggalperiksa)) {
+                     $reg = \App\Models\RegPeriksa::where('no_rkm_medis', $referensi->norm)
+                         ->where('tgl_registrasi', $referensi->tanggalperiksa)
+                         ->orderBy('jam_reg', 'desc')
+                         ->first();
+                     if ($reg) {
+                         $no_rawat = $reg->no_rawat;
+                     }
+                 }
             }
 
             if (!$reg) {

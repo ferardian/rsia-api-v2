@@ -15,10 +15,8 @@ class BerkasPegawaiController  extends Controller
      */
     public function index($nik, Request $request)
     {
-        $page = $request->query('page', 1);
         $select = $request->query('select', '*');
-
-        $berkas = \App\Models\BerkasPegawai::where('nik', $nik)->with('masterBerkasPegawai')->paginate(10, explode(',', $select), 'page', $page);
+        $berkas = \App\Models\BerkasPegawai::where('nik', $nik)->with('masterBerkasPegawai')->get(explode(',', $select));
 
         return new \App\Http\Resources\Berkas\CompleteCollection($berkas);
     }
