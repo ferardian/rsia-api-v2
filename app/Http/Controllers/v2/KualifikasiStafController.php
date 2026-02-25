@@ -28,11 +28,13 @@ class KualifikasiStafController extends Controller
                 ->leftJoin('petugas as pt', 'pt.nip', '=', 'p.nik')
                 ->leftJoin('rsia_pendidikan_str as ps', 'ps.kode_tingkat', '=', 'p.pendidikan')
                 ->leftJoin('rsia_kualifikasi_staf_klinis as k', 'k.nik', '=', 'p.nik')
+                ->leftJoin('departemen as d', 'd.dep_id', '=', 'p.departemen')
                 ->where('p.stts_aktif', 'AKTIF')
                 ->select([
                     'p.nik',
                     'p.nama',
                     'p.jbtn',
+                    'd.nama as departemen',
                     'p.pendidikan',
                     'pt.no_telp',
                     // Kualifikasi data (will be null if not exists)
@@ -45,6 +47,7 @@ class KualifikasiStafController extends Controller
                     'k.perguruan_tinggi',
                     'k.prodi',
                     'k.tanggal_lulus',
+                    'k.bukti_kelulusan',
                     'k.status',
                     'k.tgl_update',
                     // Flag to check if kualifikasi exists
@@ -79,6 +82,19 @@ class KualifikasiStafController extends Controller
 
             if ($request->filled('kategori_profesi')) {
                 $query->where('k.kategori_profesi', $request->kategori_profesi);
+            }
+
+            if ($request->filled('group')) {
+                if ($request->group === 'perawat_ners') {
+                    $query->where(function($q) {
+                        $q->where('p.pendidikan', 'like', '%Perawat%')
+                          ->orWhere('p.pendidikan', 'like', '%Ners%')
+                          ->orWhere('k.prodi', 'like', '%Perawat%')
+                          ->orWhere('k.prodi', 'like', '%Ners%')
+                          ->orWhere('k.kategori_profesi', 'like', '%Perawat%')
+                          ->orWhere('k.kategori_profesi', 'like', '%Ners%');
+                    });
+                }
             }
 
             if ($request->filled('has_kualifikasi')) {
@@ -237,6 +253,76 @@ class KualifikasiStafController extends Controller
     }
 
     /**
+     * Upload Bukti Kelulusan
+     *
+     * @param Request $request
+     * @param string $nik
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function uploadBuktiKelulusan(Request $request, $nik)
+    {
+        try {
+            $request->validate([
+                'file' => 'required|file|mimes:pdf,jpg,jpeg,png|max:10240' // max 10MB
+            ]);
+
+            $kualifikasi = RsiaKualifikasiStafKlinis::where('nik', $nik)->first();
+            $pegawai = Pegawai::where('nik', $nik)->first();
+
+            if (!$kualifikasi || !$pegawai) {
+                return \App\Helpers\ApiResponse::notFound('Data Kualifikasi atau Pegawai tidak ditemukan');
+            }
+
+            $file = $request->file('file');
+            $extension = $file->getClientOriginalExtension();
+            
+            // Format file name: NIK-Bukti-Kelulusan-NamaPegawai.ext
+            $nik_formatted = str_replace('.', '-', $nik);
+            $nama_pegawai_formatted = str_replace([' ', '/', '\\'], '-', strtoupper($pegawai->nama));
+            $nama_pegawai_formatted = preg_replace('/[^A-Z0-9\-]/', '-', $nama_pegawai_formatted);
+            $nama_pegawai_formatted = preg_replace('/-+/', '-', $nama_pegawai_formatted);
+            $nama_pegawai_formatted = trim($nama_pegawai_formatted, '-');
+
+            $file_name = $nik_formatted . '-BUKTI-KELULUSAN-' . $nama_pegawai_formatted . '.' . $extension;
+
+            \DB::transaction(function () use ($kualifikasi, $file, $file_name) {
+                $oldFile = $kualifikasi->bukti_kelulusan;
+                $st = new \Illuminate\Support\Facades\Storage();
+                $location = env('DOCUMENT_KUALIFIKASI_SAVE_LOCATION', 'webapps/rsia_kualifikasi/');
+                
+                if ($location && !\Illuminate\Support\Str::endsWith($location, '/')) {
+                    $location .= '/';
+                }
+
+                // Delete old file if exists
+                if ($oldFile && $oldFile != '' && $st::disk('sftp_pegawai')->exists($location . $oldFile)) {
+                    \App\Helpers\Logger\RSIALogger::berkas("DELETING OLD BUKTI KELULUSAN", 'info', ['file_name' => $oldFile]);
+                    $st::disk('sftp_pegawai')->delete($location . $oldFile);
+                }
+
+                // Upload new file
+                $st::disk('sftp_pegawai')->put($location . $file_name, file_get_contents($file));
+                \App\Helpers\Logger\RSIALogger::berkas("UPLOADED BUKTI KELULUSAN", 'info', ['file_name' => $file_name, 'file_size' => $file->getSize()]);
+
+                // Update database
+                $kualifikasi->update(['bukti_kelulusan' => $file_name, 'tgl_update' => now()]);
+            });
+
+            return \App\Helpers\ApiResponse::success('Bukti Kelulusan berhasil diupload', ['file' => $file_name]);
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $e->errors()
+            ], 422);
+        } catch (\Exception $e) {
+            \App\Helpers\Logger\RSIALogger::berkas("UPLOAD BUKTI KELULUSAN FAILED", 'error', ['nik' => $nik, 'error' => $e->getMessage()]);
+            return \App\Helpers\ApiResponse::error('Gagal mengupload bukti kelulusan', 'upload_failed', $e->getMessage(), 500);
+        }
+    }
+
+    /**
      * Delete kualifikasi
      *
      * @param string $nik
@@ -251,6 +337,19 @@ class KualifikasiStafController extends Controller
             }
 
             \DB::transaction(function () use ($kualifikasi, $nik) {
+                // Delete file from SFTP if exists
+                if ($kualifikasi->bukti_kelulusan) {
+                    $st = new \Illuminate\Support\Facades\Storage();
+                    $location = env('DOCUMENT_KUALIFIKASI_SAVE_LOCATION', 'webapps/rsia_kualifikasi/');
+                    if ($location && !\Illuminate\Support\Str::endsWith($location, '/')) {
+                        $location .= '/';
+                    }
+                    if ($st::disk('sftp_pegawai')->exists($location . $kualifikasi->bukti_kelulusan)) {
+                        \App\Helpers\Logger\RSIALogger::berkas("DELETING BUKTI KELULUSAN ON DESTROY", 'info', ['file_name' => $kualifikasi->bukti_kelulusan]);
+                        $st::disk('sftp_pegawai')->delete($location . $kualifikasi->bukti_kelulusan);
+                    }
+                }
+
                 $kualifikasi->delete();
 
                 $sql = "DELETE FROM rsia_kualifikasi_staf_klinis WHERE nik='{$nik}'";

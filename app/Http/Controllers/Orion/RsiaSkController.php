@@ -51,7 +51,7 @@ class RsiaSkController extends Controller
      */
     public function alwaysIncludes(): array
     {
-        return ['penanggungJawab'];
+        return ['penanggungJawab', 'targetPegawai'];
     }
 
     /**
@@ -71,6 +71,6 @@ class RsiaSkController extends Controller
      */
     public function searchableBy(): array
     {
-        return ['judul', 'penanggungJawab.nama'];
+        return ['judul', 'penanggungJawab.nama', 'targetPegawai.nama'];
     }
 }

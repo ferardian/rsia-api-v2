@@ -53,6 +53,7 @@ Route::middleware(['auth:aes', 'claim:role,pegawai|dokter|IT|admin|direksi'])->p
     Route::post('kualifikasi-staf', [\App\Http\Controllers\v2\KualifikasiStafController::class, 'store']);
     Route::put('kualifikasi-staf/{nik}', [\App\Http\Controllers\v2\KualifikasiStafController::class, 'update']);
     Route::delete('kualifikasi-staf/{nik}', [\App\Http\Controllers\v2\KualifikasiStafController::class, 'destroy']);
+    Route::post('kualifikasi-staf/{nik}/upload-bukti-kelulusan', [\App\Http\Controllers\v2\KualifikasiStafController::class, 'uploadBuktiKelulusan']);
 
     // Unit Shift Rules (Orion REST API)
     Orion::resource('unit-shift-rules', \App\Http\Controllers\Orion\RsiaUnitShiftRuleController::class);

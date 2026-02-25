@@ -15,12 +15,14 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
  * B = Pengangkatan Jabatan
  * @property string $judul
  * @property string $pj
+ * @property string $nik
  * @property string $tgl_terbit
  * @property string $berkas
  * @property string $status
  * @property string $status_approval
  * @property string $created_at
  * @property-read \App\Models\Pegawai $penanggungJawab
+ * @property-read \App\Models\Pegawai $targetPegawai
  * @method static \Illuminate\Database\Eloquent\Builder|RsiaSk newModelQuery()
  * @method static \Illuminate\Database\Eloquent\Builder|RsiaSk newQuery()
  * @method static \Illuminate\Database\Eloquent\Builder|RsiaSk query()
@@ -51,5 +53,10 @@ class RsiaSk extends Model
     public function penanggungJawab()
     {
         return $this->belongsTo(Pegawai::class, 'pj', 'nik')->select('nik', 'nama');
+    }
+
+    public function targetPegawai()
+    {
+        return $this->belongsTo(Pegawai::class, 'nik', 'nik')->select('nik', 'nama', 'jbtn', 'pendidikan', 'departemen');
     }
 }

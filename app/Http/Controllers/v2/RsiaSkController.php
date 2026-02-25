@@ -23,9 +23,10 @@ class RsiaSkController extends Controller
         $select = $request->input('select', '*');
 
         $query = RsiaSk::select(array_map('trim', explode(',', $select)))
-            ->with(['penanggungJawab' => function ($q) {
-                $q->select('nik', 'nama');
-            }]);
+            ->with([
+                'penanggungJawab' => function ($q) { $q->select('nik', 'nama', 'jbtn'); },
+                'targetPegawai' => function ($q) { $q->select('nik', 'nama', 'jbtn', 'pendidikan', 'departemen'); }
+            ]);
 
         if ($request->has('status_approval')) {
             $query->where('status_approval', $request->input('status_approval'));
@@ -59,6 +60,7 @@ class RsiaSkController extends Controller
             'jenis'      => 'required|string',
             'judul'      => 'required|string',
             'pj'         => 'required|exists:pegawai,nik',
+            'nik'        => 'nullable|exists:pegawai,nik',
             'tgl_terbit' => 'required|date',
             'file'       => 'nullable|file|mimes:pdf,doc,docx,jpg,jpeg,png|max:102400',
             'status_approval' => 'nullable|in:pengajuan,disetujui,ditolak',
@@ -98,6 +100,9 @@ class RsiaSkController extends Controller
 
                     \App\Helpers\Logger\RSIALogger::berkas("UPLOADED", 'info', ['file_name' => $file_name, 'file_size' => $file->getSize(), 'data' => $request->all()]);
                     $st::disk('sftp_pegawai')->put(env('DOCUMENT_SK_SAVE_LOCATION') . $file_name, file_get_contents($file));
+
+                    // Sync to Berkas Pegawai if applicable
+                    $this->syncToBerkasPegawai($data);
                 }
             });
         } catch (\Exception $e) {
@@ -180,6 +185,7 @@ class RsiaSkController extends Controller
             'jenis'      => 'required|string',
             'judul'      => 'required|string',
             'pj'         => 'required|string',
+            'nik'        => 'nullable|exists:pegawai,nik',
             'tgl_terbit' => 'required|date',
             'file'       => 'file|mimes:pdf,doc,docx,jpg,jpeg,png|max:102400',
         ]);
@@ -227,17 +233,18 @@ class RsiaSkController extends Controller
                 if ($file) {
                     $st = new Storage();
 
-
-
                     $st::disk('sftp_pegawai')->put(env('DOCUMENT_SK_SAVE_LOCATION') . $file_name, file_get_contents($file));
 
                     if ($oldFile && $oldFile != '' && $st::disk('sftp_pegawai')->exists(env('DOCUMENT_SK_SAVE_LOCATION') . $oldFile)) {
                         \App\Helpers\Logger\RSIALogger::berkas("DELETING OLD FILE", 'info', ['file_name' => $oldFile]);
                         $st::disk('sftp_pegawai')->delete(env('DOCUMENT_SK_SAVE_LOCATION') . $oldFile);
                     }
-                    
+
                     $data->update(['berkas' => $file_name]);
                 }
+
+                // Sync to Berkas Pegawai if applicable (even if just updating NIK)
+                $this->syncToBerkasPegawai($data);
                 
             });
         } catch (\Exception $e) {
@@ -338,5 +345,78 @@ class RsiaSkController extends Controller
         }
 
         return ApiResponse::success('data approved successfully');
+    }
+
+    /**
+     * Sync Credentialing SK to Berkas Pegawai table
+     */
+    private function syncToBerkasPegawai($sk)
+    {
+        // Only sync ifjudul contains "SPK RKK" and nik is provided
+        if (!$sk->nik || !str_contains(strtoupper($sk->judul), 'SPK RKK')) {
+            return;
+        }
+
+        if (!$sk->berkas) {
+            return;
+        }
+
+        $pegawai = \App\Models\Pegawai::where('nik', $sk->nik)->first();
+        if (!$pegawai) {
+            return;
+        }
+
+        // Determine kode_berkas based on profession/education
+        $kode_berkas = 'MBP0045'; // Default: Profesi Lain
+        $pendidikan = strtoupper($pegawai->pendidikan);
+        $jabatan = strtoupper($pegawai->jbtn);
+
+        if (str_contains($jabatan, 'SPESIALIS')) {
+            $kode_berkas = 'MBP0019'; // Tenaga klinis Dokter Spesialis
+        } elseif (str_contains($jabatan, 'DOKTER') || str_contains($pendidikan, 'DOKTER')) {
+            $kode_berkas = 'MBP0006'; // Tenaga klinis Dokter Umum
+        } elseif (str_contains($jabatan, 'PERAWAT') || str_contains($jabatan, 'BIDAN')) {
+            $kode_berkas = 'MBP0032'; // Tenaga klinis Perawat dan Bidan
+        }
+
+        try {
+            $st = new Storage();
+            $skPath = env('DOCUMENT_SK_SAVE_LOCATION') . $sk->berkas;
+            $berkasPegawaiLocation = env('DOCUMENT_SAVE_LOCATION', 'webapps/penggajian/pages/berkaspegawai/berkas/');
+            
+            // Format Filename for Berkas Pegawai (Legacy style consistency)
+            $nik_formatted = str_replace('.', '-', $sk->nik);
+            $nama_pegawai_formatted = preg_replace('/[^A-Za-z0-9\-]/', '-', str_replace(' ', '-', $pegawai->nama));
+            $nama_pegawai_formatted = trim(preg_replace('/-+/', '-', $nama_pegawai_formatted), '-');
+            
+            $ext = pathinfo($sk->berkas, PATHINFO_EXTENSION);
+            $berkasFileName = $nik_formatted . '-SPK-RKK-' . $nama_pegawai_formatted . '.' . $ext;
+            
+            $fullDestPath = rtrim($berkasPegawaiLocation, '/') . '/' . $berkasFileName;
+
+            // Copy file on SFTP
+            if ($st::disk('sftp_pegawai')->exists($skPath)) {
+                $fileContent = $st::disk('sftp_pegawai')->get($skPath);
+                $st::disk('sftp_pegawai')->put($fullDestPath, $fileContent);
+                
+                // Update/Create record in berkas_pegawai
+                \App\Models\BerkasPegawai::updateOrCreate(
+                    ['nik' => $sk->nik, 'kode_berkas' => $kode_berkas],
+                    [
+                        'tgl_uploud' => date('Y-m-d'),
+                        'berkas' => "pages/berkaspegawai/berkas/" . $berkasFileName
+                    ]
+                );
+                
+                \App\Helpers\Logger\RSIALogger::berkas("SYNCED TO BERKAS PEGAWAI", 'info', [
+                    'sk_nomor' => $sk->nomor,
+                    'nik' => $sk->nik,
+                    'kode_berkas' => $kode_berkas,
+                    'file' => $berkasFileName
+                ]);
+            }
+        } catch (\Exception $e) {
+            \App\Helpers\Logger\RSIALogger::berkas("SYNC TO BERKAS PEGAWAI FAILED", 'error', ['error' => $e->getMessage()]);
+        }
     }
 }

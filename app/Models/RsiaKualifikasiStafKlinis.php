@@ -49,6 +49,7 @@ class RsiaKualifikasiStafKlinis extends Model
         'perguruan_tinggi',
         'prodi',
         'tanggal_lulus',
+        'bukti_kelulusan',
         'status',
     ];
 
