@@ -560,7 +560,7 @@ class PegawaiController extends Controller
                 ], 400);
             }
 
-            $pegawai = \DB::table('pegawai as p')
+            $pegawaiQuery = \DB::table('pegawai as p')
                 ->leftJoin('petugas as pt', 'pt.nip', '=', 'p.nik')
                 ->leftJoin('rsia_user_role as ur', function($join) {
                     $join->on('ur.nip', '=', 'p.nik')
@@ -571,8 +571,17 @@ class PegawaiController extends Controller
                 ->leftJoin('rsia_nomor_kartu_pegawai as rnk', 'rnk.nip', '=', 'p.nik') // Added
                 ->leftJoin('rsia_keluarga_pegawai as rkp', 'rkp.nik', '=', 'p.nik') // Added for family count
                 ->where('p.stts_aktif', 'AKTIF')
-                ->where('pt.kd_jbtn', '<>', '-')
-                ->where(function($q) use ($query) {
+                ->where('pt.kd_jbtn', '<>', '-');
+
+            if ($request->has('filter.departemen')) {
+                $dept = $request->input('filter.departemen');
+                $pegawaiQuery->where(function($q) use ($dept) {
+                    $q->where('d.nama', 'like', "%{$dept}%")
+                      ->orWhere('p.departemen', $dept);
+                });
+            }
+
+            $pegawai = $pegawaiQuery->where(function($q) use ($query) {
                     $q->where('p.nama', 'like', "%{$query}%")
                       ->orWhere('p.nik', 'like', "%{$query}%")
                       ->orWhere('p.jbtn', 'like', "%{$query}%")
