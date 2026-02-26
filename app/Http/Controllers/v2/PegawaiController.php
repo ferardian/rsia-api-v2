@@ -62,11 +62,24 @@ class PegawaiController extends Controller
                 \DB::raw('GROUP_CONCAT(DISTINCT r.nama_role SEPARATOR ", ") as nama_role')
             ])
             ->groupBy('p.nik', 'p.nama', 'p.jk', 'p.tmp_lahir', 'p.tgl_lahir', 'p.alamat', 'p.pendidikan', 'p.no_ktp', 'rnk.no_bpjs', 'rnk.no_bpjstk', 'pt.no_telp', 'rep.email', 'p.jbtn', 'p.departemen', 'd.nama', 'p.mulai_kerja', 'p.stts_aktif', 'p.photo')
-            ->orderBy('p.nama', 'asc')
-            ->where('p.stts_aktif', 'AKTIF')
-            ->where('pt.kd_jbtn', '<>', '-');
+            ->orderBy('p.nama', 'asc');
+            // ->where('p.stts_aktif', 'AKTIF') // Removed hardcoded filter
+            // ->where('pt.kd_jbtn', '<>', '-');
 
         // Apply Filters
+        if ($request->has('stts_aktif')) {
+            if ($request->stts_aktif === 'ALL') {
+                // Show all, no status filter
+            } else if ($request->stts_aktif === 'NON-AKTIF') {
+                $pegawaiQuery->where('p.stts_aktif', '<>', 'AKTIF');
+            } else {
+                $pegawaiQuery->where('p.stts_aktif', $request->stts_aktif);
+            }
+        } else {
+            // Default to AKTIF if no status filter provided
+            $pegawaiQuery->where('p.stts_aktif', 'AKTIF');
+        }
+
         if ($request->has('filter.departemen')) {
             $pegawaiQuery->where('p.departemen', $request->input('filter.departemen'));
         }
@@ -112,6 +125,7 @@ class PegawaiController extends Controller
                 'email' => $item->email, // Added
                 'id_role' => $primaryRoleId,
                 'role_name' => $item->nama_role ?: 'Belum ada role',
+                'stts_aktif' => $item->stts_aktif,
                 'status' => $item->stts_aktif === 'AKTIF' ? 1 : 0,
                 'jbtn' => $item->jbtn,
                 'departemen' => $item->nama_departemen ?? $item->departemen, // Use Name OR Code as fallback
@@ -569,9 +583,23 @@ class PegawaiController extends Controller
                 ->leftJoin('rsia_role as r', 'ur.id_role', '=', 'r.id_role')
                 ->leftJoin('departemen as d', 'd.dep_id', '=', 'p.departemen')
                 ->leftJoin('rsia_nomor_kartu_pegawai as rnk', 'rnk.nip', '=', 'p.nik') // Added
-                ->leftJoin('rsia_keluarga_pegawai as rkp', 'rkp.nik', '=', 'p.nik') // Added for family count
-                ->where('p.stts_aktif', 'AKTIF')
-                ->where('pt.kd_jbtn', '<>', '-');
+                ->leftJoin('rsia_keluarga_pegawai as rkp', 'rkp.nik', '=', 'p.nik'); // Added for family count
+                // ->where('p.stts_aktif', 'AKTIF') // Removed hardcoded filter
+                // ->where('pt.kd_jbtn', '<>', '-');
+
+            // Status Filter in Search
+            if ($request->has('stts_aktif')) {
+                if ($request->stts_aktif === 'ALL') {
+                    // Show all
+                } else if ($request->stts_aktif === 'NON-AKTIF') {
+                    $pegawaiQuery->where('p.stts_aktif', '<>', 'AKTIF');
+                } else {
+                    $pegawaiQuery->where('p.stts_aktif', $request->stts_aktif);
+                }
+            } else {
+                // Default to AKTIF for search as well if no status specified
+                $pegawaiQuery->where('p.stts_aktif', 'AKTIF');
+            }
 
             if ($request->has('filter.departemen')) {
                 $dept = $request->input('filter.departemen');
@@ -638,6 +666,7 @@ class PegawaiController extends Controller
                     'email' => null,
                     'id_role' => $primaryRoleId,
                     'role_name' => $item->nama_role ?: 'Belum ada role',
+                    'stts_aktif' => $item->stts_aktif,
                     'status' => $item->stts_aktif === 'AKTIF' ? 1 : 0,
                     'jbtn' => $item->jbtn,
                     'departemen' => $item->nama_departemen ?? $item->departemen,
