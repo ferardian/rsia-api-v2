@@ -84,12 +84,11 @@ class JadwalPegawaiController extends Controller
                 }
             } catch (\Exception $e) {}
 
-            // If mapping exists and user is NOT Admin/IT, apply the mapping.
-            // This takes precedence over 'direksi' role being a superuser.
-            if (!$isAdminIT && !empty($downstreamDepts)) {
+            // If mapping exists and user is NOT SuperUser, apply the mapping.
+            if (!$isSuperUser && !empty($downstreamDepts)) {
                 $query->whereIn('departemen', $downstreamDepts);
                 $isSuperUser = false; // Restricted view
-            } elseif (!$isAdminIT && ($approver->status_koor == '1' || str_contains(strtolower($approver->jbtn), 'koordinator') || str_contains(strtolower($approver->jbtn), 'kepala'))) {
+            } elseif (!$isSuperUser && ($approver->status_koor == '1' || str_contains(strtolower($approver->jbtn), 'koordinator') || str_contains(strtolower($approver->jbtn), 'kepala'))) {
                 // Fallback: If no mapping but is a Coordinator/Head (identified by status_koor or title), show their own department
                 $query->where('departemen', $approver->departemen);
                 $isSuperUser = false;
