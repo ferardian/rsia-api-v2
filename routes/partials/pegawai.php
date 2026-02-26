@@ -52,6 +52,11 @@ Route::middleware(['auth:aes', 'claim:role,pegawai|dokter'])->group(function () 
   Route::get('presensi-online/status', [\App\Http\Controllers\v2\PresensiOnlineController::class, 'getStatus']);
   Route::get('presensi-online/config', [\App\Http\Controllers\v2\PresensiOnlineController::class, 'getConfig']);
 
+  // ==================== LEMBUR PEGAWAI (Overtime)
+  Route::post('lembur/check-in', [\App\Http\Controllers\v2\LemburController::class, 'checkIn']);
+  Route::post('lembur/check-out', [\App\Http\Controllers\v2\LemburController::class, 'checkOut']);
+  Route::get('lembur/status', [\App\Http\Controllers\v2\LemburController::class, 'status']);
+
   // ==================== KELUARGA PEGAWAI
   Route::apiResource('pegawai.keluarga', \App\Http\Controllers\v2\KeluargaPegawaiController::class)->only(['store', 'destroy'])
     ->parameters(['pegawai' => 'nik', 'keluarga' => 'id']);
