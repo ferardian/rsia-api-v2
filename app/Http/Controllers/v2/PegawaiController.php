@@ -62,9 +62,8 @@ class PegawaiController extends Controller
                 \DB::raw('GROUP_CONCAT(DISTINCT r.nama_role SEPARATOR ", ") as nama_role')
             ])
             ->groupBy('p.nik', 'p.nama', 'p.jk', 'p.tmp_lahir', 'p.tgl_lahir', 'p.alamat', 'p.pendidikan', 'p.no_ktp', 'rnk.no_bpjs', 'rnk.no_bpjstk', 'pt.no_telp', 'rep.email', 'p.jbtn', 'p.departemen', 'd.nama', 'p.mulai_kerja', 'p.stts_aktif', 'p.photo')
-            ->orderBy('p.nama', 'asc');
-            // ->where('p.stts_aktif', 'AKTIF') // Removed hardcoded filter
-            // ->where('pt.kd_jbtn', '<>', '-');
+            ->orderBy('p.nama', 'asc')
+            ->where('pt.kd_jbtn', '<>', '-');
 
         // Apply Filters
         if ($request->has('stts_aktif')) {
@@ -583,9 +582,8 @@ class PegawaiController extends Controller
                 ->leftJoin('rsia_role as r', 'ur.id_role', '=', 'r.id_role')
                 ->leftJoin('departemen as d', 'd.dep_id', '=', 'p.departemen')
                 ->leftJoin('rsia_nomor_kartu_pegawai as rnk', 'rnk.nip', '=', 'p.nik') // Added
-                ->leftJoin('rsia_keluarga_pegawai as rkp', 'rkp.nik', '=', 'p.nik'); // Added for family count
-                // ->where('p.stts_aktif', 'AKTIF') // Removed hardcoded filter
-                // ->where('pt.kd_jbtn', '<>', '-');
+                ->leftJoin('rsia_keluarga_pegawai as rkp', 'rkp.nik', '=', 'p.nik') // Added for family count
+                ->where('pt.kd_jbtn', '<>', '-');
 
             // Status Filter in Search
             if ($request->has('stts_aktif')) {
