@@ -56,6 +56,7 @@ Route::middleware(['auth:aes', 'claim:role,pegawai|dokter'])->group(function () 
   Route::post('lembur/check-in', [\App\Http\Controllers\v2\LemburController::class, 'checkIn']);
   Route::post('lembur/check-out', [\App\Http\Controllers\v2\LemburController::class, 'checkOut']);
   Route::get('lembur/status', [\App\Http\Controllers\v2\LemburController::class, 'status']);
+  Route::get('lembur/history', [\App\Http\Controllers\v2\LemburController::class, 'history']);
 
   // ==================== KELUARGA PEGAWAI
   Route::apiResource('pegawai.keluarga', \App\Http\Controllers\v2\KeluargaPegawaiController::class)->only(['store', 'destroy'])

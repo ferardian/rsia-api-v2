@@ -203,4 +203,23 @@ class LemburController extends Controller
             ]
         ]);
     }
+
+    public function history(Request $request)
+    {
+        $this->validate($request, [
+            'nik' => 'required|exists:pegawai,nik',
+        ]);
+
+        $pegawai = Pegawai::where('nik', $request->nik)->first();
+
+        $history = RsiaRekapLembur::where('id', $pegawai->id)
+            ->orderBy('jam_datang', 'desc')
+            ->paginate($request->limit ?? 20);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Riwayat lembur berhasil diambil',
+            'data' => $history
+        ]);
+    }
 }
