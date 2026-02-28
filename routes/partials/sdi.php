@@ -34,6 +34,7 @@ Route::middleware(['auth:aes', 'claim:role,pegawai|dokter|IT|admin|direksi'])->p
     Route::get('pegawai/tanpa-email', [PegawaiController::class, 'tanpaEmail']);
     Route::post('pegawai/update-email', [PegawaiController::class, 'updateEmail']);
     Route::post('pegawai/update-profile', [PegawaiController::class, 'updateProfile']);
+    Route::get('pegawai/kredensial/{nik}', [PegawaiController::class, 'getKredensial']);
     Route::apiResource('pegawai', PegawaiController::class);
     
     // Berkas Pegawai (Legacy Parity)

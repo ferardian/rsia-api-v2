@@ -50,9 +50,18 @@ class KualifikasiStafController extends Controller
                     'k.bukti_kelulusan',
                     'k.status',
                     'k.tgl_update',
+                    // Latest Credential SK data
+                    'sk.judul as judul_sk',
+                    'sk.tgl_terbit as tgl_terbit_sk',
+                    'sk.berkas as berkas_sk',
                     // Flag to check if kualifikasi exists
                     \DB::raw('IF(k.nik IS NOT NULL, 1, 0) as has_kualifikasi')
-                ]);
+                ])
+                ->leftJoin(\DB::raw('(SELECT nik, judul, tgl_terbit, berkas 
+                            FROM rsia_sk 
+                            WHERE status_approval = "disetujui" 
+                            AND (nik, tgl_terbit) IN (SELECT nik, MAX(tgl_terbit) FROM rsia_sk WHERE status_approval = "disetujui" GROUP BY nik)
+                           ) as sk'), 'sk.nik', '=', 'p.nik');
 
             // Apply filters
             if ($request->has('search')) {

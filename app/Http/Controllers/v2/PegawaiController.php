@@ -1324,4 +1324,74 @@ class PegawaiController extends Controller
             ], 500);
         }
     }
+    /**
+     * Get employee credential information from rsia_sk.
+     * 
+     * @param string $nik
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getKredensial($nik)
+    {
+        $pegawai = \App\Models\Pegawai::where('nik', $nik)->first();
+        if (!$pegawai) {
+            return \App\Helpers\ApiResponse::notFound('Pegawai not found');
+        }
+
+        $sk = \App\Models\RsiaSk::where('nik', $nik)
+            ->where('status_approval', 'disetujui')
+            ->orderBy('tgl_terbit', 'desc')
+            ->first();
+
+        if (!$sk) {
+            return \App\Helpers\ApiResponse::notFound('Data kredensial tidak ditemukan');
+        }
+
+        $pendidikan = strtoupper($pegawai->pendidikan);
+        $tglTerbit = \Illuminate\Support\Carbon::parse($sk->tgl_terbit);
+        $tahunTerbit = $tglTerbit->year;
+        $tahunAwal = 2017;
+        $masaKerja = $tahunTerbit - $tahunAwal;
+
+        $kredensial = '-';
+        if (str_contains($pendidikan, 'D3') || str_contains($pendidikan, 'DIII')) {
+            if ($masaKerja >= 22) {
+                $kredensial = 'PK V (≥ 22 Tahun)';
+            } elseif ($masaKerja >= 19) {
+                $kredensial = 'PK IV (≥ 19 Tahun)';
+            } elseif ($masaKerja > 9) {
+                $kredensial = 'PK III (> 9 - 12 Tahun)';
+            } elseif ($masaKerja > 6) {
+                $kredensial = 'PK II (> 6 - 9 Tahun)';
+            } elseif ($masaKerja >= 3) {
+                $kredensial = 'PK I (3 - 6 Tahun)';
+            } else {
+                $kredensial = 'PRA PK (0 - 3 Tahun)';
+            }
+        } elseif (str_contains($pendidikan, 'NERS')) {
+            if ($masaKerja > 12) {
+                $kredensial = 'Utama (> 12 tahun)';
+            } elseif ($masaKerja >= 6) {
+                $kredensial = 'Madya (6 - 12 tahun)';
+            } elseif ($masaKerja >= 2) {
+                $kredensial = 'Muda (2 - 6 tahun)';
+            } else {
+                $kredensial = 'Pratama (0 - 2 tahun)';
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'nik' => $nik,
+                'nama' => $pegawai->nama,
+                'pendidikan' => $pegawai->pendidikan,
+                'tgl_terbit' => $sk->tgl_terbit,
+                'judul_sk' => $sk->judul,
+                'berkas' => $sk->berkas,
+                'masa_kerja_sk' => $masaKerja,
+                'kredensial' => $kredensial,
+                'sk_detail' => $sk
+            ]
+        ]);
+    }
 }
