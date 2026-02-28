@@ -116,9 +116,10 @@ class KualifikasiStafController extends Controller
             // Apply sorting
             $sortBy = $request->get('sort_by', 'p.nama');
             $sortOrder = $request->get('sort_order', 'asc');
+            
             $query->orderBy($sortBy, $sortOrder);
 
-            $data = $query->get();
+            $data = $query->get()->unique('nik')->values();
 
             return response()->json([
                 'success' => true,
@@ -193,7 +194,7 @@ class KualifikasiStafController extends Controller
 
                 RsiaKualifikasiStafKlinis::create($data);
 
-                $sql = "INSERT INTO rsia_kualifikasi_staf_klinis (nik, kategori_profesi, nomor_str) VALUES ('{$request->nik}', '{$request->kategori_profesi}', '{$request->nomor_str}')";
+                $sql = "INSERT INTO rsia_kualifikasi_staf_klinis (nik, kategori_profesi, nomor_str) ... (using Eloquent)";
                 $this->logTracker($sql, $request);
             });
 
@@ -244,7 +245,7 @@ class KualifikasiStafController extends Controller
 
                 $kualifikasi->update($data);
 
-                $sql = "UPDATE rsia_kualifikasi_staf_klinis SET kategori_profesi='{$request->kategori_profesi}', nomor_str='{$request->nomor_str}' WHERE nik='{$nik}'";
+                $sql = "UPDATE rsia_kualifikasi_staf_klinis SET kategori_profesi='{$request->kategori_profesi}', nomor_str='{$request->nomor_str}' ... (using Eloquent)";
                 $this->logTracker($sql, $request);
             });
 
@@ -361,7 +362,7 @@ class KualifikasiStafController extends Controller
 
                 $kualifikasi->delete();
 
-                $sql = "DELETE FROM rsia_kualifikasi_staf_klinis WHERE nik='{$nik}'";
+                $sql = "DELETE FROM rsia_kualifikasi_staf_klinis WHERE nik='{$nik}' ... (using Eloquent)";
                 $this->logTracker($sql, request());
             });
 
