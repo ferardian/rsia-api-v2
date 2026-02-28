@@ -259,4 +259,81 @@ class JadwalTambahanController extends Controller
             return ApiResponse::error('Gagal menyetujui jadwal: ' . $e->getMessage(), 'approve_error', null, 500);
         }
     }
+
+    // SAVE TO BOTH DRAFT AND FINAL (ADMIN DIRECT INPUT)
+    public function storeAdmin(Request $request)
+    {
+        $bulan = sprintf('%02d', $request->input('bulan'));
+        $tahun = $request->input('tahun');
+        $items = $request->input('data'); 
+
+        if (!$items || !is_array($items)) {
+             return ApiResponse::error('Invalid data format', 'invalid_data', null, 400);
+        }
+
+        \Log::info('JadwalTambahan storeAdmin request', [
+            'bulan' => $bulan,
+            'tahun' => $tahun,
+            'user' => auth()->id(),
+            'item_count' => count($items)
+        ]);
+
+        DB::beginTransaction();
+        try {
+            foreach ($items as $item) {
+                if (!isset($item['id'])) {
+                    throw new \Exception('Item ID is missing');
+                }
+
+                // Save to DRAFT table
+                $draft = RsiaJadwalTambahan::firstOrNew([
+                    'id' => $item['id'],
+                    'bulan' => $bulan,
+                    'tahun' => $tahun
+                ]);
+
+                if (!$draft->exists) {
+                    for ($i = 1; $i <= 31; $i++) {
+                        $draft->{'h' . $i} = ''; 
+                    }
+                }
+
+                for ($i = 1; $i <= 31; $i++) {
+                    $key = 'h' . $i; 
+                    if (array_key_exists($key, $item)) {
+                        $val = $item[$key];
+                        $draft->{$key} = is_null($val) ? '' : $val;
+                    }
+                }
+
+                $draft->save();
+
+                // Save to FINAL table
+                $final = JadwalTambahan::firstOrNew([
+                    'id' => $item['id'],
+                    'bulan' => $bulan,
+                    'tahun' => $tahun
+                ]);
+
+                for ($i = 1; $i <= 31; $i++) {
+                    $key = 'h' . $i; 
+                    if (array_key_exists($key, $item)) {
+                        $val = $item[$key];
+                        $final->{$key} = is_null($val) ? '' : $val;
+                    }
+                }
+
+                $final->save();
+            }
+            DB::commit();
+            return ApiResponse::success('Jadwal tambahan berhasil disimpan (Draft & Final)');
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            \Log::error('Gagal menyimpan jadwal tambahan', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return ApiResponse::error('Gagal menyimpan jadwal tambahan: ' . $e->getMessage(), 'save_error', null, 500);
+        }
+    }
 }

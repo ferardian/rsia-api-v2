@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\TemporaryPresensi;
 use App\Models\RekapPresensi;
 use App\Models\JadwalPegawai;
+use App\Models\JadwalTambahan;
 use App\Models\Pegawai;
 use App\Models\PegawaiFaceMaster;
 use App\Models\JamMasuk;
@@ -18,7 +19,7 @@ class PresensiOnlineController extends Controller
 {
     private $centerLat = -6.94159449034943;
     private $centerLng = 109.65221083435888;
-    private $maxRadius = 200; // meters
+    private $maxRadius = 100; // meters
 
     /**
      * Check if employee has registered face, if not auto-register
@@ -120,15 +121,24 @@ class PresensiOnlineController extends Controller
         $currentYear = $today->year;
         $currentDay = $today->day;
         
-        $jadwal = JadwalPegawai::where('id', $pegawai->id)
-            ->where('tahun', $currentYear)
-            ->where('bulan', $currentMonth)
-            ->first();
+        $isTambahan = $request->input('is_tambahan') == 'true' || $request->input('is_tambahan') == 1;
+
+        if ($isTambahan) {
+            $jadwal = JadwalTambahan::where('id', $pegawai->id)
+                ->where('tahun', $currentYear)
+                ->where('bulan', sprintf('%02d', $currentMonth))
+                ->first();
+        } else {
+            $jadwal = JadwalPegawai::where('id', $pegawai->id)
+                ->where('tahun', $currentYear)
+                ->where('bulan', $currentMonth)
+                ->first();
+        }
 
         if (!$jadwal) {
             return response()->json([
                 'success' => false,
-                'message' => 'Jadwal tidak ditemukan untuk bulan ini',
+                'message' => 'Jadwal ' . ($isTambahan ? 'tambahan ' : '') . 'tidak ditemukan untuk bulan ini',
             ], 400);
         }
 
@@ -139,7 +149,7 @@ class PresensiOnlineController extends Controller
         if (!$shift || $shift === '-') {
             return response()->json([
                 'success' => false,
-                'message' => 'Anda tidak memiliki jadwal hari ini',
+                'message' => 'Anda tidak memiliki jadwal ' . ($isTambahan ? 'tambahan ' : '') . 'hari ini',
             ], 400);
         }
 
@@ -265,6 +275,8 @@ class PresensiOnlineController extends Controller
             ], 400);
         }
 
+        $isTambahan = $request->input('is_tambahan') == 'true' || $request->input('is_tambahan') == 1;
+
         // 4.0 AI Face Verification (only if not first time)
         // Store current photo temporarily for verification
         $photoPathOut = $request->file('photo')->store('presensi/temp/' . date('Y-m-d'), 'public');
@@ -294,7 +306,14 @@ class PresensiOnlineController extends Controller
         }
 
         // 4.1 Enforce "1 hour before shift end" rule
-        $shiftInfo = JamMasuk::where('shift', $tempPresensi->shift)->first();
+        if ($isTambahan) {
+            $shiftInfo = JamMasuk::where('shift', $tempPresensi->shift)->first();
+        } else {
+            $shiftInfo = JamMasuk::where('shift', $tempPresensi->shift)->first();
+        }
+        
+        // Actually both use JamMasuk for shift details, table choice only affects where we get $shift column from (which is already in $tempPresensi)
+        
         if ($shiftInfo) {
             $jamDatang = $tempPresensi->jam_datang;
             $jamPulangShift = Carbon::createFromFormat('H:i:s', $shiftInfo->jam_pulang);
@@ -319,16 +338,15 @@ class PresensiOnlineController extends Controller
             }
         }
 
-        // 5. Check if already checked out
+        // 5. Check if already checked out (for this specific session)
         $existingRekap = RekapPresensi::where('id', $pegawai->id)
-            ->whereDate('jam_datang', $today)
-            ->whereNotNull('jam_pulang')
+            ->where('jam_datang', $tempPresensi->jam_datang)
             ->first();
 
         if ($existingRekap) {
             return response()->json([
                 'success' => false,
-                'message' => 'Anda sudah melakukan check-out hari ini',
+                'message' => 'Anda sudah melakukan check-out untuk sesi ini',
             ], 400);
         }
 
@@ -411,13 +429,13 @@ class PresensiOnlineController extends Controller
             'face_registered' => $faceMaster ? true : false,
         ];
 
-        if ($rekapPresensi) {
+        if ($tempPresensi) {
+            $status = 'checked_in';
+            $data['jam_masuk'] = $tempPresensi->jam_datang->format('H:i');
+        } elseif ($rekapPresensi) {
             $status = 'checked_out';
             $data['jam_masuk'] = $rekapPresensi->jam_datang->format('H:i');
             $data['jam_pulang'] = $rekapPresensi->jam_pulang ? $rekapPresensi->jam_pulang->format('H:i') : null;
-        } elseif ($tempPresensi) {
-            $status = 'checked_in';
-            $data['jam_masuk'] = $tempPresensi->jam_datang->format('H:i');
         }
 
         return response()->json([

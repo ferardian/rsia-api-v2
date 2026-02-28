@@ -262,14 +262,6 @@ class PegawaiController extends Controller
             if (!in_array('no_ktp', $fields)) $fields[] = 'no_ktp';
         }
 
-        // Debug: log apa yang ada di database
-        $pegawaiRaw = \App\Models\Pegawai::where('nik', $id)->first();
-        \Log::info('Raw pegawai data for nik ' . $id, [
-            'nik' => $pegawaiRaw->nik ?? 'null',
-            'no_ktp' => $pegawaiRaw->no_ktp ?? 'null',
-            'all_data' => $pegawaiRaw ? $pegawaiRaw->toArray() : 'not found'
-        ]);
-
         $pegawai = \App\Models\Pegawai::select($fields)
             ->where('nik', $id)
             ->first();
@@ -288,6 +280,8 @@ class PegawaiController extends Controller
         if (!$pegawai) {
             return \App\Helpers\ApiResponse::notFound('Pegawai not found');
         }
+
+        $pegawai->makeVisible(['id']);
 
         return response()->json([
             'success' => true,

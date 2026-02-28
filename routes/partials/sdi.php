@@ -24,6 +24,7 @@ Route::middleware(['auth:aes', 'claim:role,pegawai|dokter|IT|admin|direksi'])->p
     // Jadwal Tambahan Routes
     Route::get('jadwal-tambahan', [JadwalTambahanController::class, 'index']);
     Route::post('jadwal-tambahan', [JadwalTambahanController::class, 'store']);
+    Route::post('jadwal-tambahan/admin', [JadwalTambahanController::class, 'storeAdmin']);
     Route::post('jadwal-tambahan/approve', [JadwalTambahanController::class, 'approve']);
     
     // Pegawai (Employee) Routes - search must come before resource

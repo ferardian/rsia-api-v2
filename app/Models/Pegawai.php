@@ -116,7 +116,7 @@ class Pegawai extends Model
     ];
 
     protected $hidden = [
-        'id'
+        // 'id' - Temporary unhide for debugging and consistent API payload
     ];
 
     protected $guarded = ['id'];

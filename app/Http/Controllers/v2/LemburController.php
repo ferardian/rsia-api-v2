@@ -15,7 +15,7 @@ class LemburController extends Controller
 {
     private $centerLat = -6.94159449034943;
     private $centerLng = 109.65221083435888;
-    private $maxRadius = 200; // meters
+    private $maxRadius = 100; // meters
 
     /**
      * Check if employee has registered face, if not auto-register

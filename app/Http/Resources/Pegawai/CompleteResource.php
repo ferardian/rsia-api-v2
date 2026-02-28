@@ -14,14 +14,11 @@ class CompleteResource extends JsonResource
      */
     public function toArray($request)
     {
-        $data = $this->resource;
+        $data = parent::toArray($request);
 
-        // Ensure no_ktp is included even if resource is already array
-        if (is_object($data)) {
-            $data = $data->toArray();
-        }
-
-        // Explicitly include no_ktp field
+        // Explicitly include id and nik field (nik is usually visible, but id is hidden in model)
+        $data['id'] = $this->id ?? ($data['id'] ?? null);
+        $data['nik'] = $this->nik ?? ($data['nik'] ?? null);
         $data['no_ktp'] = $this->no_ktp ?? ($data['no_ktp'] ?? null);
 
         return $data;
