@@ -433,9 +433,41 @@ class PresensiOnlineController extends Controller
             $status = 'checked_in';
             $data['jam_masuk'] = $tempPresensi->jam_datang->format('H:i');
         } elseif ($rekapPresensi) {
+             // If already checked out regular, check for Jadwal Tambahan
             $status = 'checked_out';
             $data['jam_masuk'] = $rekapPresensi->jam_datang->format('H:i');
             $data['jam_pulang'] = $rekapPresensi->jam_pulang ? $rekapPresensi->jam_pulang->format('H:i') : null;
+
+            // Check if there's an UNPRESSED Jadwal Tambahan for today
+            $today = Carbon::today();
+            $jadwalTambahan = JadwalTambahan::where('id', $pegawai->id)
+                ->where('tahun', $today->year)
+                ->where('bulan', sprintf('%02d', $today->month))
+                ->first();
+
+            if ($jadwalTambahan) {
+                $shiftColumn = 'h' . $today->day;
+                $shiftTambahan = $jadwalTambahan->$shiftColumn;
+
+                if ($shiftTambahan && $shiftTambahan !== '-') {
+                    // Check if this additional shift has BEEN processed today
+                    // Look for A SECOND record in Rekap or a record in Temp
+                    $tempTambahan = TemporaryPresensi::where('id', $pegawai->id)
+                        ->whereDate('jam_datang', $today)
+                        ->where('shift', $shiftTambahan)
+                        ->first();
+                    
+                    $rekapTambahan = RekapPresensi::where('id', $pegawai->id)
+                        ->whereDate('jam_datang', $today)
+                        ->where('shift', $shiftTambahan)
+                        ->first();
+
+                    if (!$tempTambahan && (!$rekapTambahan || $rekapTambahan->jam_datang->equalTo($rekapPresensi->jam_datang))) {
+                        $data['has_jadwal_tambahan'] = true;
+                        $data['jadwal_tambahan_shift'] = $shiftTambahan;
+                    }
+                }
+            }
         }
 
         return response()->json([
